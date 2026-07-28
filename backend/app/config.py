@@ -21,6 +21,15 @@ class Settings(BaseSettings):
     seed_admin_email: str = "admin@tradewind.ai"
     seed_admin_password: str = "admin"
 
+    # Alpaca
+    alpaca_api_key_id: str = ""
+    alpaca_api_secret_key: str = ""
+    alpaca_base_url: str = "https://paper-api.alpaca.markets"
+    alpaca_data_url: str = "https://data.alpaca.markets"
+
+    # Market data cache
+    market_data_cache_ttl_minutes: int = 15
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 
