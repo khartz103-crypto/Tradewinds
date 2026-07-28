@@ -30,9 +30,11 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: postgresql://tradewind:tradewind@db:5432/tradewind
+      DATABASE_URL: postgresql+asyncpg://tradewind:tradewind@db:5432/tradewind
       REDIS_URL: redis://redis:6379/0
       CORS_ORIGINS: http://localhost:3000
+      SEED_ADMIN_EMAIL: admin@tradewind.ai
+      SEED_ADMIN_PASSWORD: admin
     depends_on:
       db:
         condition: service_healthy
@@ -40,7 +42,8 @@ services:
         condition: service_healthy
     volumes:
       - ./backend:/app
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: >
+      sh -c "alembic upgrade head && python -m app.seed && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
 
   frontend:
     build: ./frontend
