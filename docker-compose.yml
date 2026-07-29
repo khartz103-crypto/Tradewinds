@@ -35,6 +35,11 @@ services:
       CORS_ORIGINS: http://localhost:3000
       SEED_ADMIN_EMAIL: admin@tradewind.ai
       SEED_ADMIN_PASSWORD: admin
+      ALPACA_API_KEY_ID: ${ALPACA_API_KEY_ID:-}
+      ALPACA_API_SECRET_KEY: ${ALPACA_API_SECRET_KEY:-}
+      ALPACA_BASE_URL: ${ALPACA_BASE_URL:-https://paper-api.alpaca.markets}
+      ALPACA_DATA_URL: ${ALPACA_DATA_URL:-https://data.alpaca.markets}
+      MARKET_DATA_CACHE_TTL_MINUTES: ${MARKET_DATA_CACHE_TTL_MINUTES:-15}
     depends_on:
       db:
         condition: service_healthy
