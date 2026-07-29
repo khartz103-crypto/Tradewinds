@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import async_session
-from app.models import Strategy, User, RiskSettings
+from app.models import Strategy, User, RiskSettings, PaperAccount
 
 
 async def seed() -> None:
@@ -76,6 +76,19 @@ async def seed() -> None:
             print("[seed] Created default risk settings for admin")
         else:
             print("[seed] Risk settings already exist for admin")
+
+        # --- Default paper account for admin ($100,000) ---
+        result = await session.execute(
+            select(PaperAccount).where(PaperAccount.user_id == admin_id)
+        )
+        existing_pa = result.scalar_one_or_none()
+        if existing_pa is None:
+            pa = PaperAccount(user_id=admin_id)
+            session.add(pa)
+            await session.flush()
+            print("[seed] Created paper account for admin ($100,000)")
+        else:
+            print("[seed] Paper account already exists for admin")
 
         await session.commit()
 

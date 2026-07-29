@@ -46,6 +46,8 @@ class Position(Base):
     exit_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     exit_price: Mapped[Decimal | None] = mapped_column(Numeric(18, 8), nullable=True)
     pnl: Mapped[Decimal | None] = mapped_column(Numeric(18, 8), nullable=True)
+    stop_loss: Mapped[Decimal | None] = mapped_column(Numeric(18, 8), nullable=True)
+    take_profit: Mapped[Decimal | None] = mapped_column(Numeric(18, 8), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
