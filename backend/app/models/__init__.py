@@ -16,6 +16,7 @@ from app.models.trade import Trade  # noqa: E402, F401
 from app.models.market_data_cache import MarketDataCache  # noqa: E402, F401
 from app.models.ai_scan_result import AIScanResult  # noqa: E402, F401
 from app.models.risk_settings import RiskSettings  # noqa: E402, F401
+from app.models.paper_account import PaperAccount  # noqa: E402, F401
 
 __all__ = [
     "Base",
@@ -27,4 +28,5 @@ __all__ = [
     "MarketDataCache",
     "AIScanResult",
     "RiskSettings",
+    "PaperAccount",
 ]
