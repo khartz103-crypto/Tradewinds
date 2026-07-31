@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     # Market data cache
     market_data_cache_ttl_minutes: int = 15
 
+    # JWT
+    jwt_secret: str = "change-me-in-production"
+    jwt_expiry_hours: int = 24
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 

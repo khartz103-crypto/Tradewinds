@@ -40,6 +40,8 @@ services:
       ALPACA_BASE_URL: ${ALPACA_BASE_URL:-https://paper-api.alpaca.markets}
       ALPACA_DATA_URL: ${ALPACA_DATA_URL:-https://data.alpaca.markets}
       MARKET_DATA_CACHE_TTL_MINUTES: ${MARKET_DATA_CACHE_TTL_MINUTES:-15}
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      JWT_EXPIRY_HOURS: ${JWT_EXPIRY_HOURS:-24}
     depends_on:
       db:
         condition: service_healthy
