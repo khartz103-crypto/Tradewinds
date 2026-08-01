@@ -14,7 +14,7 @@ export function clearToken() {
   window.localStorage.removeItem("token");
 }
 
-async function apiClient(path: string, options?: RequestInit) {
+async function apiClient<T = unknown>(path: string, options?: RequestInit): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -34,7 +34,7 @@ async function apiClient(path: string, options?: RequestInit) {
     const err = await res.json().catch(() => ({ detail: "Request failed" }));
     throw new Error(err.detail);
   }
-  return res.json();
+  return res.json() as Promise<T>;
 }
 
 export function apiGet<T = unknown>(path: string): Promise<T> {
