@@ -1,0 +1,50 @@
+# TradeWind AI — Docker Compose development overrides (EXAMPLE)
+# --------------------------------------------------------------
+# This file shows how to layer development tweaks on top of docker-compose.yml.
+# Docker Compose auto-loads a file named `docker-compose.override.yml`, so to
+# activate these overrides simply:
+#
+#   cp docker-compose.override.yml.example docker-compose.override.yml
+#   docker compose up --build
+#
+# (The `.example` suffix keeps Compose from picking this up until you copy it.)
+# You can also pass it explicitly:  docker compose -f docker-compose.yml \
+#   -f docker-compose.override.yml.example up
+#
+# The base docker-compose.yml is already dev-friendly (source bind-mounts +
+# backend --reload + `npm run dev`). Use this file for *extra* local tweaks.
+
+services:
+  # ── Backend: debug logging, extra CORS origins ─────────────────────────
+  backend:
+    environment:
+      # Verbose uvicorn/backend logging
+      DEBUG: "true"
+      # Allow additional origins (comma-separated), e.g. a tunnel domain or
+      # a second local frontend on port 3001
+      CORS_ORIGINS: "http://localhost:3000,http://localhost:3001"
+    command: >
+      sh -c "alembic upgrade head && python -m app.seed &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --log-level debug"
+
+  # ── Frontend: override the backend URL the browser talks to ────────────
+  # Useful when the backend is behind a tunnel/proxy rather than localhost.
+  frontend:
+    environment:
+      NEXT_PUBLIC_BACKEND_URL: "http://localhost:8000"
+
+  # ── One-off test runner ────────────────────────────────────────────────
+  # Run the backend test suite inside a container:
+  #   docker compose run --rm test
+  test:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+asyncpg://tradewind:tradewind@db:5432/tradewind
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: test-secret
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    command: pytest -v
