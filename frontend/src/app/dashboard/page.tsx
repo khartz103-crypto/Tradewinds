@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { IChartApi, ISeriesApi, UTCTimestamp } from "lightweight-charts";
 import { apiGet } from "@/lib/api";
 import { formatCurrency, formatPercent } from "@/lib/format";
 
@@ -16,13 +17,26 @@ interface PortfolioSummary {
   current_balance: number | string;
 }
 
+interface EquityPoint {
+  time: UTCTimestamp;
+  value: number;
+}
+
 const REFRESH_MS = 30_000;
 
 export default function DashboardPage() {
   const [portfolio, setPortfolio] = useState<PortfolioSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [equityPoints, setEquityPoints] = useState<EquityPoint[]>([]);
+  const [chartReady, setChartReady] = useState(false);
+
   const chartContainerRef = useRef<HTMLDivElement>(null);
+  // Chart/series instances live in refs so the portfolio update effect can
+  // push points without recreating the chart.
+  const chartRef = useRef<IChartApi | null>(null);
+  const seriesRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const hasFedDataRef = useRef(false);
 
   const fetchPortfolio = useCallback(async () => {
     try {
@@ -44,17 +58,18 @@ export default function DashboardPage() {
   }, [fetchPortfolio]);
 
   // Initialize the equity curve chart once the container is mounted.
+  // lightweight-charts is loaded lazily so it never runs during SSR.
   useEffect(() => {
-    let chart: ReturnType<typeof import("lightweight-charts")["createChart"]> | null =
-      null;
-    let series: ReturnType<
-      ReturnType<typeof import("lightweight-charts")["createChart"]>["addLineSeries"]
-    > | null = null;
-    let cleanupFn: (() => void) | null = null;
+    let cancelled = false;
+    let chart: IChartApi | null = null;
 
     (async () => {
-      if (!chartContainerRef.current) return;
-      const { createChart, ColorType } = await import("lightweight-charts");
+      if (!chartContainerRef.current || cancelled) return;
+      const { createChart, ColorType, LineSeries } = await import(
+        "lightweight-charts"
+      );
+      if (!chartContainerRef.current || cancelled) return;
+
       chart = createChart(chartContainerRef.current, {
         autoSize: true,
         layout: {
@@ -73,36 +88,54 @@ export default function DashboardPage() {
           horzLine: { color: "rgba(148, 163, 184, 0.4)" },
         },
       });
-      series = chart.addLineSeries({
+      chartRef.current = chart;
+      seriesRef.current = chart.addSeries(LineSeries, {
         color: "#3b82f6",
         lineWidth: 2,
         pointMarkersVisible: true,
         lastValueVisible: true,
       });
-      cleanupFn = () => {
-        chart?.remove();
-      };
+      if (!cancelled) setChartReady(true);
     })();
 
     return () => {
-      cleanupFn?.();
+      cancelled = true;
+      chartRef.current = null;
+      seriesRef.current = null;
+      hasFedDataRef.current = false;
+      chart?.remove();
     };
   }, []);
 
-  // Push the current account value into the chart whenever it changes.
+  // Record an equity point whenever the account value moves. The first
+  // successful poll seeds the line; later polls only append when the value
+  // actually changed, so the curve grows without flat duplicates.
   useEffect(() => {
     if (!portfolio) return;
-    (async () => {
-      const { UTCTimestamp } = await import("lightweight-charts");
-      const { createChart } = await import("lightweight-charts");
-      if (!chartContainerRef.current) return;
-      // Series ref approach: lightweight-charts does not expose an easy
-      // "get existing series" API, so we update via the stored instance
-      // captured below through a closure held in a module-level map.
-      void UTCTimestamp;
-      void createChart;
-    })();
+    const value = Number(portfolio.account_value);
+    if (!Number.isFinite(value)) return;
+    const now = Math.floor(Date.now() / 1000) as UTCTimestamp;
+    setEquityPoints((prev) => {
+      const last = prev[prev.length - 1];
+      if (last && last.value === value) return prev;
+      return [...prev, { time: now, value }];
+    });
   }, [portfolio]);
+
+  // Feed new points into the chart once it exists. The first sync seeds the
+  // whole series; every later sync pushes just the newest point.
+  useEffect(() => {
+    if (!chartReady) return;
+    const series = seriesRef.current;
+    if (!series || equityPoints.length === 0) return;
+    if (!hasFedDataRef.current) {
+      series.setData(equityPoints);
+      hasFedDataRef.current = true;
+    } else {
+      series.update(equityPoints[equityPoints.length - 1]);
+    }
+    chartRef.current?.timeScale().fitContent();
+  }, [equityPoints, chartReady]);
 
   const isLoading = loading && !portfolio;
 
@@ -173,8 +206,9 @@ export default function DashboardPage() {
             </div>
             <div ref={chartContainerRef} className="mt-4 h-64 w-full" />
             <p className="mt-3 text-xs text-gray-500">
-              Equity curve data will accumulate as you trade. Only the current
-              portfolio value is shown for now.
+              {equityPoints.length > 0
+                ? `${equityPoints.length} sample${equityPoints.length === 1 ? "" : "s"} · new points are added on each poll when the account value changes.`
+                : "Waiting for portfolio data to start the equity curve…"}
             </p>
           </div>
         </>
