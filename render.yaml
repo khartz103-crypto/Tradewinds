@@ -64,12 +64,13 @@ services:
         generateValue: true
       - key: JWT_EXPIRY_HOURS
         value: "24"
-      # CORS: allow the deployed frontend origin (resolved by Render).
+      # CORS: allow the deployed frontend origin.
+      # Render web services get a URL of the form https://<name>.onrender.com.
+      # If Render assigns a different URL (e.g. due to a name collision),
+      # update this value to match the actual frontend URL shown in the
+      # Render dashboard after the first deploy.
       - key: CORS_ORIGINS
-        fromService:
-          type: web
-          name: tradewind-frontend
-          property: url
+        value: https://tradewind-frontend.onrender.com
       - key: SEED_ADMIN_EMAIL
         value: admin@tradewind.ai
       # Prompted in the Render dashboard at deploy time — choose a strong
@@ -111,8 +112,8 @@ services:
     dockerContext: ./frontend
     healthCheckPath: /
     envVars:
+      # Backend API URL — hardcoded to the expected Render service URL.
+      # If Render assigns a different URL (name collision), update this
+      # from the Render dashboard to match the actual backend URL.
       - key: NEXT_PUBLIC_BACKEND_URL
-        fromService:
-          type: web
-          name: tradewind-backend
-          property: url
+        value: https://tradewind-backend.onrender.com
