@@ -34,7 +34,11 @@ async def seed() -> None:
             print(f"[seed] Created admin user: {settings.seed_admin_email}")
         else:
             admin_id = existing.id
-            print(f"[seed] Admin user already exists: {settings.seed_admin_email}")
+            # Always update the password hash in case the previous seed ran with
+            # a broken bcrypt version (e.g. passlib/bcrypt incompatibility).
+            existing.hashed_password = bcrypt.hash(settings.seed_admin_password[:72])
+            session.add(existing)
+            print(f"[seed] Admin user already exists (password updated): {settings.seed_admin_email}")
 
         # --- Trend-following strategy ---
         result = await session.execute(
