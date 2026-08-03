@@ -24,7 +24,7 @@ async def seed() -> None:
         if existing is None:
             admin = User(
                 email=settings.seed_admin_email,
-                hashed_password=bcrypt.hash(settings.seed_admin_password),
+                hashed_password=bcrypt.hash(settings.seed_admin_password[:72]),
                 is_admin=True,
                 is_active=True,
             )
