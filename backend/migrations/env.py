@@ -1,7 +1,6 @@
 """Alembic async migration environment."""
 
 import asyncio
-import os
 from logging.config import fileConfig
 
 from sqlalchemy import pool
@@ -10,13 +9,15 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 
+from app.config import settings
+
 # Alembic Config object
 config = context.config
 
-# Override sqlalchemy.url from environment variable if set
-db_url = os.getenv("DATABASE_URL", "").replace("+asyncpg", "+asyncpg")
-if db_url:
-    config.set_main_option("sqlalchemy.url", db_url)
+# Use the app's DATABASE_URL so driver normalization applies (managed
+# providers such as Render expose postgresql:// DSNs, which need to be
+# rewritten to postgresql+asyncpg:// for the async engine).
+config.set_main_option("sqlalchemy.url", settings.database_url)
 
 # Set up logging
 if config.config_file_name is not None:
