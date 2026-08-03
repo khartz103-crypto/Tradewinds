@@ -4,16 +4,18 @@ COPY package.json package-lock.json* ./
 RUN npm install
 COPY . .
 
-# Render injects service environment variables as Docker build arguments
-# (see render.com/docs/docker — "Environment variable translation"), so
-# NEXT_PUBLIC_BACKEND_URL is available here at build time. It must be
-# baked in during `next build` because Next.js inlines NEXT_PUBLIC_*
-# values into the client bundle at build time.
-# NOTE: docker-compose development overrides this image's command with
-# `npm run dev`, which reads the variable at runtime instead — so local
-# dev behaviour is unchanged.
-ARG NEXT_PUBLIC_BACKEND_URL
+# NEXT_PUBLIC_BACKEND_URL must be baked into the client bundle at build
+# time (Next.js inlines NEXT_PUBLIC_* at build time). The default value
+# is used when Render doesn't pass the build arg — which can happen on
+# the first Blueprint deploy before the env var is fully resolved.
+# docker-compose dev flow is unchanged (compose overrides CMD with
+# `npm run dev`, which reads the var at runtime).
+ARG NEXT_PUBLIC_BACKEND_URL=https://tradewind-backend.onrender.com
 ENV NEXT_PUBLIC_BACKEND_URL=$NEXT_PUBLIC_BACKEND_URL
+
+# Next.js builds are memory-hungry. The free plan's "starter" build tier
+# (~512 MB) can OOM-kill the build. Limiting the Node heap keeps it alive.
+ENV NODE_OPTIONS="--max-old-space-size=384"
 
 RUN npm run build
 EXPOSE 3000
