@@ -1,7 +1,7 @@
-FROM node:20-alpine
+FROM node:20-slim
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm install
 COPY . .
 
 # NEXT_PUBLIC_BACKEND_URL must be baked into the client bundle at build
