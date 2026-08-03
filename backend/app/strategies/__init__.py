@@ -23,6 +23,7 @@ class StrategySignal:
     reasoning: str = ""
     indicators: dict = field(default_factory=dict)
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    error: str | None = None
 
 
 # ── Base Strategy ───────────────────────────────────────────────────────

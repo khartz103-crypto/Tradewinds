@@ -48,6 +48,7 @@ class StrategySignalResponse(BaseModel):
     take_profit: float | None = None
     reasoning: str = ""
     indicators: dict = {}
+    error: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -66,6 +67,7 @@ def _signal_dc_to_response(signal: StrategySignalDC) -> StrategySignalResponse:
         take_profit=signal.take_profit,
         reasoning=signal.reasoning,
         indicators=signal.indicators,
+        error=signal.error,
     )
 
 

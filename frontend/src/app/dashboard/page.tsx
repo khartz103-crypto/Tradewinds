@@ -37,6 +37,8 @@ export default function DashboardPage() {
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Line"> | null>(null);
   const hasFedDataRef = useRef(false);
+  // Tracks whether the first account_value fetch has seeded the equity line.
+  const hasSeededEquityRef = useRef(false);
 
   const fetchPortfolio = useCallback(async () => {
     try {
@@ -108,8 +110,10 @@ export default function DashboardPage() {
   }, []);
 
   // Record an equity point whenever the account value moves. The first
-  // successful poll seeds the line; later polls only append when the value
-  // actually changed, so the curve grows without flat duplicates.
+  // successful poll seeds the line with TWO points (1s apart, same value) so
+  // lightweight-charts has a visible flat line even on a fresh $100k account
+  // with no positions; later polls only append when the value actually
+  // changed, so the curve grows without flat duplicates.
   useEffect(() => {
     if (!portfolio) return;
     const value = Number(portfolio.account_value);
@@ -117,6 +121,13 @@ export default function DashboardPage() {
     const now = Math.floor(Date.now() / 1000) as UTCTimestamp;
     setEquityPoints((prev) => {
       const last = prev[prev.length - 1];
+      if (!hasSeededEquityRef.current) {
+        hasSeededEquityRef.current = true;
+        return [
+          { time: (now - 1) as UTCTimestamp, value },
+          { time: now, value },
+        ];
+      }
       if (last && last.value === value) return prev;
       return [...prev, { time: now, value }];
     });

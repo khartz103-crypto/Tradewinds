@@ -17,6 +17,17 @@ from app.models.user import User
 bearer_scheme = HTTPBearer()
 
 
+class InvalidTokenError(HTTPException):
+    """Raised when a Bearer token is missing, expired, or invalid."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
 def create_access_token(user_id: UUID) -> str:
     """Create a signed JWT with ``sub`` and ``exp`` claims.
 
@@ -60,28 +71,23 @@ async def get_current_user(
     or if the referenced user does not exist.
     """
     token = credentials.credentials
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Invalid or expired token",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
 
     try:
         payload = jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])
         user_id_str: str | None = payload.get("sub")
         if user_id_str is None:
-            raise credentials_exception
+            raise InvalidTokenError()
     except JWTError:
-        raise credentials_exception
+        raise InvalidTokenError()
 
     try:
         user_id = UUID(user_id_str)
     except ValueError:
-        raise credentials_exception
+        raise InvalidTokenError()
 
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if user is None or not user.is_active:
-        raise credentials_exception
+        raise InvalidTokenError()
 
     return user

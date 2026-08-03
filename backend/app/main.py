@@ -1,9 +1,10 @@
 """TradeWind AI — FastAPI backend."""
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app.auth import InvalidTokenError
 from app.config import settings
 from app.routers import auth, market_data, paper_trading, strategies
 
@@ -22,11 +23,15 @@ app.add_middleware(
 # ── JWT error handling ────────────────────────────────────────────────
 
 
-@app.exception_handler(401)
-async def unauthorized_handler(request: Request, exc: Exception) -> JSONResponse:
-    """Ensure 401 responses include a JSON body with ``detail``."""
+@app.exception_handler(InvalidTokenError)
+async def invalid_token_handler(request: Request, exc: InvalidTokenError) -> JSONResponse:
+    """Ensure invalid-token responses include a JSON body with ``detail``.
+
+    Only handles token failures (``InvalidTokenError``), so login failures
+    keep their own ``detail`` message instead of being overwritten.
+    """
     return JSONResponse(
-        status_code=401,
+        status_code=status.HTTP_401_UNAUTHORIZED,
         content={"detail": "Invalid or expired token"},
         headers={"WWW-Authenticate": "Bearer"},
     )
