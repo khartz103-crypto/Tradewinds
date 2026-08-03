@@ -58,6 +58,14 @@ mode by default.
 
 Interactive API docs are available at <http://localhost:8000/docs> (Swagger UI).
 
+## Deployment (Render)
+
+The repo includes a [Render Blueprint](render.yaml) that provisions the whole
+platform — managed PostgreSQL, managed Redis, the FastAPI backend, and the
+Next.js frontend — in one click. See **[DEPLOY.md](DEPLOY.md)** for full
+deployment instructions (one-click Blueprint deploy, env vars to fill in,
+URLs, and first-login details).
+
 ## Architecture
 
 ```
