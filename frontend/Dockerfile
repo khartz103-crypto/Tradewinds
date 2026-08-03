@@ -1,7 +1,7 @@
 FROM node:20-alpine
 WORKDIR /app
-COPY package.json package-lock.json* ./
-RUN npm install
+COPY package.json package-lock.json ./
+RUN npm ci
 COPY . .
 
 # NEXT_PUBLIC_BACKEND_URL must be baked into the client bundle at build
@@ -16,6 +16,9 @@ ENV NEXT_PUBLIC_BACKEND_URL=$NEXT_PUBLIC_BACKEND_URL
 # Next.js builds are memory-hungry. The free plan's "starter" build tier
 # (~512 MB) can OOM-kill the build. Limiting the Node heap keeps it alive.
 ENV NODE_OPTIONS="--max-old-space-size=384"
+
+# Disable telemetry and skip lint in production build (lint is a dev concern).
+ENV NEXT_TELEMETRY_DISABLED=1
 
 RUN npm run build
 EXPOSE 3000
