@@ -81,7 +81,15 @@ async def run_strategy(
                     signal.symbol,
                     signal.confidence,
                 )
-        except Exception:
+        except Exception as exc:
             logger.exception("Error analyzing %s with strategy '%s'.", symbol, strategy_name)
+            signals.append(
+                StrategySignal(
+                    symbol=symbol,
+                    action="hold",
+                    confidence=0,
+                    error=str(exc),
+                )
+            )
 
     return signals

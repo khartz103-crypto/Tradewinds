@@ -14,6 +14,7 @@ interface Signal {
   reasoning: string;
   indicators: Record<string, number | string | null>;
   timestamp?: string;
+  error?: string;
 }
 
 interface Strategy {
@@ -170,9 +171,24 @@ export default function ScannerPage() {
             <span className="text-xs capitalize text-gray-500">{selectedStrategyLabel}</span>
           </div>
           {signals.map((signal, index) => {
+            const key = `${signal.symbol}-${index}`;
+            if (signal.error) {
+              return (
+                <article key={key} className="overflow-hidden rounded-xl border border-red-800 bg-red-950/40 shadow-lg">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-red-800 px-5 py-4">
+                    <div className="flex items-center gap-3">
+                      <h3 className="text-xl font-bold tracking-wide text-red-200">{signal.symbol}</h3>
+                    </div>
+                    <span className="rounded-md bg-red-600 px-4 py-1.5 text-sm font-extrabold tracking-widest text-white">ERROR</span>
+                  </div>
+                  <div className="p-5">
+                    <p className="text-sm leading-6 text-red-300">{signal.error}</p>
+                  </div>
+                </article>
+              );
+            }
             const confidence = Number(signal.confidence);
             const isBuy = signal.action.toLowerCase() === "buy";
-            const key = `${signal.symbol}-${index}`;
             return (
               <article key={key} className="overflow-hidden rounded-xl border border-gray-700 bg-gray-800 shadow-lg">
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-700 px-5 py-4">
