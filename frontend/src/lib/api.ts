@@ -21,20 +21,32 @@ async function apiClient<T = unknown>(path: string, options?: RequestInit): Prom
     ...((options?.headers as Record<string, string>) || {}),
   };
   if (token) headers["Authorization"] = `Bearer ${token}`;
-  const res = await fetch(`${BACKEND_URL}${path}`, { ...options, headers });
-  if (res.status === 401) {
-    clearToken();
-    // Avoid a full-page reload when we are already on the login page
-    // (e.g. a failed sign-in attempt).
-    if (window.location.pathname !== "/login") {
-      window.location.href = "/login";
+
+  // Free-tier backends sleep after 15 min and take 30-60s to wake.
+  // A 60s timeout prevents indefinite loading spinners.
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 60_000);
+
+  try {
+    const res = await fetch(`${BACKEND_URL}${path}`, {
+      ...options,
+      headers,
+      signal: controller.signal,
+    });
+    if (res.status === 401) {
+      clearToken();
+      if (window.location.pathname !== "/login") {
+        window.location.href = "/login";
+      }
     }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: "Request failed" }));
+      throw new Error(err.detail);
+    }
+    return res.json() as Promise<T>;
+  } finally {
+    clearTimeout(timeout);
   }
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: "Request failed" }));
-    throw new Error(err.detail);
-  }
-  return res.json() as Promise<T>;
 }
 
 export function apiGet<T = unknown>(path: string): Promise<T> {
