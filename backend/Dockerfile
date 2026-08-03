@@ -10,4 +10,6 @@ COPY . .
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+# Shell-form CMD so $PORT (injected by Render) is expanded and && chains work.
+# The --reload flag is dropped in production — Render handles restarts.
+CMD alembic upgrade head && python -m app.seed && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
