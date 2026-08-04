@@ -12,6 +12,7 @@ from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.models.paper_account import PaperAccount
 from app.models.position import Position, PositionSide, PositionStatus
@@ -545,15 +546,20 @@ async def get_open_positions(
     user_id: UUID,
 ) -> list[Position]:
     """Return all currently open positions for a user."""
-    result = await db.execute(
-        select(Position)
-        .where(
-            Position.user_id == user_id,
-            Position.status == PositionStatus.OPEN,
+    try:
+        result = await db.execute(
+            select(Position)
+            .where(
+                Position.user_id == user_id,
+                Position.status == PositionStatus.OPEN,
+            )
+            .order_by(Position.entry_date.desc())
         )
-        .order_by(Position.entry_date.desc())
-    )
-    return list(result.scalars().all())
+        return list(result.scalars().all())
+    except SQLAlchemyError:
+        await db.rollback()
+        logger.exception("Unable to load open positions")
+        return []
 
 
 async def get_closed_positions(
