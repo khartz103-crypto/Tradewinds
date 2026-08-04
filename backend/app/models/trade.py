@@ -40,9 +40,24 @@ class Trade(Base):
     side: Mapped[str] = mapped_column(String(10), nullable=False)
     quantity: Mapped[Decimal] = mapped_column(Numeric(18, 8), nullable=False)
     price: Mapped[Decimal] = mapped_column(Numeric(18, 8), nullable=False)
-    order_type: Mapped[OrderType] = mapped_column(Enum(OrderType), nullable=False)
+    order_type: Mapped[OrderType] = mapped_column(
+        Enum(
+            OrderType,
+            name="ordertype",
+            create_type=False,
+            values_callable=lambda enum_class: [member.value for member in enum_class],
+        ),
+        nullable=False,
+    )
     status: Mapped[TradeStatus] = mapped_column(
-        Enum(TradeStatus), default=TradeStatus.PENDING, nullable=False
+        Enum(
+            TradeStatus,
+            name="tradestatus",
+            create_type=False,
+            values_callable=lambda enum_class: [member.value for member in enum_class],
+        ),
+        default=TradeStatus.PENDING,
+        nullable=False
     )
     filled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     strategy_id: Mapped[uuid.UUID | None] = mapped_column(
