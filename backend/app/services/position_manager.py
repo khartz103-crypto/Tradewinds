@@ -6,6 +6,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.position import Position, PositionStatus
@@ -20,14 +21,19 @@ async def manage_positions(db: AsyncSession, user_id: UUID) -> dict:
 
     A missing quote is fail-safe: the position is neither updated nor closed.
     """
-    result = await db.execute(select(Position).where(
-        Position.user_id == user_id, Position.status == PositionStatus.OPEN
-    ))
-    # Keep scheduler resilient to a transient/partial DB adapter failure.
-    if not hasattr(result, "scalars"):
-        logger.warning("Unable to enumerate open positions; skipping management cycle")
+    try:
+        result = await db.execute(select(Position).where(
+            Position.user_id == user_id, Position.status == PositionStatus.OPEN
+        ))
+        # Keep scheduler resilient to a transient/partial DB adapter failure.
+        if not hasattr(result, "scalars"):
+            logger.warning("Unable to enumerate open positions; skipping management cycle")
+            return {"closed": [], "monitored": 0}
+        positions = list(result.scalars().all())
+    except SQLAlchemyError:
+        await db.rollback()
+        logger.exception("Unable to enumerate open positions; skipping management cycle")
         return {"closed": [], "monitored": 0}
-    positions = list(result.scalars().all())
     closed = []
     for position in positions:
         try:

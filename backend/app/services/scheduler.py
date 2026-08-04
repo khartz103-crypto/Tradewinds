@@ -115,53 +115,49 @@ async def _record_run(summary: dict) -> None:
 
 
 async def run_once() -> dict:
-    """Run one scheduled scan + auto-trade pass against the default watchlist.
-
-    Returns a summary dict with counts of scanned symbols, signals, opened
-    positions, and skipped signals.
-    """
+    """Run one scheduled scan + auto-trade pass against the default watchlist."""
     from app.database import async_session
     from app.services.auto_trade import auto_trade_signals
     from app.services.position_manager import manage_positions
     from app.services.strategy_engine import run_strategy
 
+    # A fresh session per cycle prevents a failed flush from poisoning the next cycle.
     async with async_session() as db:
-        result = await db.execute(
-            select(User).where(User.is_admin == True).order_by(User.created_at).limit(1)  # noqa: E712
-        )
-        admin = result.scalar_one_or_none()
-        if admin is None:
-            logger.warning("Scheduler tick skipped — no admin user found")
-            return {"scanned": False, "reason": "no admin user"}
-
-        # Always enforce existing stops/targets before allocating new capital.
-        management = await manage_positions(db, user_id=admin.id)
-
-        signals = []
-        results = []
-        for strategy_name in ("trend_following", "mean_reversion"):
-            strategy_result = await db.execute(select(Strategy).where(Strategy.name == strategy_name))
-            strategy = strategy_result.scalar_one_or_none()
-            strategy_signals = await run_strategy(db, strategy_name, DEFAULT_SYMBOLS)
-            signals.extend(strategy_signals)
-            results.extend(await auto_trade_signals(
-                db, user_id=admin.id, signals=strategy_signals,
-                strategy_id=strategy.id if strategy else None,
-                risk_per_trade=(strategy.config or {}).get("risk_per_trade", 0.02) if strategy else 0.02,
-                strategy_name=strategy_name,
-            ))
-        await db.commit()
-
-        summary = {
-            "position_management": management,
-            "scanned_symbols": len(DEFAULT_SYMBOLS) * 2,
-            "signals": len(signals),
-            "opened": sum(1 for r in results if r.get("error") is None),
-            "skipped": sum(1 for r in results if r.get("error") is not None),
-        }
-        logger.info("Scheduled scan complete: %s", summary)
-        return summary
-
+        try:
+            result = await db.execute(select(User).where(User.is_admin == True).order_by(User.created_at).limit(1))  # noqa: E712
+            admin = result.scalar_one_or_none()
+            if admin is None:
+                logger.warning("Scheduler tick skipped — no admin user found")
+                return {"scanned": False, "reason": "no admin user"}
+            management = await manage_positions(db, user_id=admin.id)
+            signals, results = [], []
+            for strategy_name in ("trend_following", "mean_reversion"):
+                strategy_result = await db.execute(select(Strategy).where(Strategy.name == strategy_name))
+                strategy = strategy_result.scalar_one_or_none()
+                strategy_signals = await run_strategy(db, strategy_name, DEFAULT_SYMBOLS)
+                signals.extend(strategy_signals)
+                results.extend(await auto_trade_signals(
+                    db, user_id=admin.id, signals=strategy_signals,
+                    strategy_id=strategy.id if strategy else None,
+                    risk_per_trade=(strategy.config or {}).get("risk_per_trade", 0.02) if strategy else 0.02,
+                    strategy_name=strategy_name,
+                ))
+            await db.commit()
+            summary = {
+                "position_management": management,
+                "scanned_symbols": len(DEFAULT_SYMBOLS) * 2,
+                "signals": len(signals),
+                "opened": sum(1 for r in results if r.get("error") is None),
+                "skipped": sum(1 for r in results if r.get("error") is not None),
+            }
+            logger.info("Scheduled scan complete: %s", summary)
+            return summary
+        except Exception:
+            try:
+                await db.rollback()
+            except Exception:
+                logger.exception("Failed to rollback scheduler session")
+            raise
 
 # ── background loop ─────────────────────────────────────────────────────
 
