@@ -14,6 +14,7 @@ class TrendFollowingStrategy(BaseStrategy):
     momentum alignment, and volume confirms participation.
 
     Config keys (all optional, defaults shown):
+        min_signals: int    = 4     Minimum conditions met to fire a signal
         short_window: int   = 20    EMA / SMA short period
         long_window: int    = 50    EMA / SMA long period
         adx_threshold: int  = 25    Minimum ADX for trending market
@@ -36,6 +37,7 @@ class TrendFollowingStrategy(BaseStrategy):
     # ── defaults ──────────────────────────────────────────────────────
 
     DEFAULTS: dict = {
+        "min_signals": 4,
         "short_window": 20,
         "long_window": 50,
         "adx_threshold": 25,
@@ -192,47 +194,48 @@ class TrendFollowingStrategy(BaseStrategy):
             "volume_confirmation": cond_volume,
         }
 
-        all_bullish = all(conditions.values())
-        all_bearish = all(not v for v in conditions.values())
+        # --- threshold-based signal decision ---------------------------
+        # A signal fires when at least `min_signals` of the 6 conditions
+        # align in one direction (4/6 by default) — far more frequent than
+        # requiring all 6.
+        bullish_count = sum(1 for v in conditions.values() if v)
+        bearish_count = sum(1 for v in conditions.values() if not v)
+        min_sig = self._cfg("min_signals")
+        total_conditions = len(conditions)
 
-        if not all_bullish and not all_bearish:
+        if bullish_count >= min_sig:
+            action = "buy"
+        elif bearish_count >= min_sig:
+            action = "sell"
+        else:
             return None
-
-        action = "buy" if all_bullish else "sell"
 
         # --- compute signal levels -----------------------------------
         entry_price = latest_close
         stop_loss: float | None = None
         take_profit: float | None = None
 
-        if all_bullish and latest_atr is not None:
+        if action == "buy" and latest_atr is not None:
             stop_loss = entry_price - self._cfg("atr_stop_mult") * latest_atr
             take_profit = entry_price + self._cfg("atr_target_mult") * latest_atr
-        elif all_bearish and latest_atr is not None:
+        elif action == "sell" and latest_atr is not None:
             stop_loss = entry_price + self._cfg("atr_stop_mult") * latest_atr
             take_profit = entry_price - self._cfg("atr_target_mult") * latest_atr
 
-        # --- confidence score (weighted) -----------------------------
-        # Each condition contributes up to ~16.7 points (100/6)
-        weight = 100.0 / len(conditions)
-        if all_bullish:
-            confidence = sum(
-                weight for c in conditions.values() if c
-            )
-        else:
-            confidence = sum(
-                weight for c in conditions.values() if not c
-            )
+        # --- confidence score (fraction of conditions met) ------------
+        # Scale by how many conditions passed in the signal direction.
+        passed = bullish_count if action == "buy" else bearish_count
+        confidence = (passed / total_conditions) * 100.0
 
         # --- reasoning ------------------------------------------------
         condition_detail = ", ".join(
-            f"{name}=PASS" if (result if all_bullish else not result)
+            f"{name}=PASS" if (result if action == "buy" else not result)
             else f"{name}=FAIL"
             for name, result in conditions.items()
         )
         reasoning = (
             f"{action.upper()} signal for {symbol} ({self.display_name}). "
-            f"Conditions: [{condition_detail}]. "
+            f"({passed}/{total_conditions} conditions met): [{condition_detail}]. "
             f"Entry: {entry_price:.2f}, SL: {stop_loss:.2f}, TP: {take_profit:.2f}. "
             f"Confidence: {confidence:.1f}%"
         )

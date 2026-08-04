@@ -48,6 +48,24 @@ def _trending_bars(n: int = 120, bias: float = 0.3) -> list[Bar]:
     return bars
 
 
+def _choppy_bars(n: int = 120) -> list[Bar]:
+    """Generate oscillating (choppy) price action — no clear trend."""
+    base = datetime(2025, 6, 1, tzinfo=timezone.utc)
+    bars = []
+    price = 100.0
+    direction = 1.0
+    for i in range(n):
+        ts = base.replace(day=min(28, i + 1))
+        o = price
+        c = price + direction * 0.3
+        h = max(o, c) + 0.5
+        l = min(o, c) - 0.5
+        bars.append(_make_bar(ts, o, h, l, c, 1_000_000))
+        price = c
+        direction *= -1
+    return bars
+
+
 # ── registry tests ──────────────────────────────────────────────────────
 
 
@@ -99,24 +117,46 @@ async def test_analyze_no_crash():
 
 
 @pytest.mark.asyncio
-async def test_analyze_choppy_returns_none():
-    """Choppy price action (ADX near 0) → no signal."""
-    s = TrendFollowingStrategy()
-    base = datetime(2025, 6, 1, tzinfo=timezone.utc)
-    bars = []
-    price = 100.0
-    direction = 1.0
-    for i in range(120):
-        ts = base.replace(day=min(28, i + 1))
-        o = price
-        c = price + direction * 0.3
-        h = max(o, c) + 0.5
-        l = min(o, c) - 0.5
-        bars.append(_make_bar(ts, o, h, l, c, 1_000_000))
-        price = c
-        direction *= -1
-    result = await s.analyze("XYZ", bars)
+async def test_analyze_choppy_strict_returns_none():
+    """Choppy price action with a strict min_signals=6 gate → no signal."""
+    s = TrendFollowingStrategy(config={"min_signals": 6})
+    result = await s.analyze("XYZ", _choppy_bars())
     assert result is None
+
+
+@pytest.mark.asyncio
+async def test_threshold_fires_on_partial_conditions():
+    """Default 4/6 threshold: a majority of bearish conditions fires a SELL.
+
+    The choppy fixture yields 5 bearish conditions (EMA/SMA/ADX/MACD/volume)
+    even though ADX is below the trending threshold — exactly the case the
+    all-or-nothing gate used to reject.
+    """
+    s = TrendFollowingStrategy()
+    result = await s.analyze("XYZ", _choppy_bars())
+    assert result is not None
+    assert result.action == "sell"
+    # 5 of 6 conditions met → confidence = 5/6 * 100, rounded to 1 decimal
+    assert result.confidence == 83.3
+    assert "(5/6 conditions met)" in result.reasoning
+    assert "ema_alignment=PASS" in result.reasoning
+    assert "rsi_zone=FAIL" in result.reasoning
+    # Bearish levels: stop above entry, take-profit below entry
+    assert result.entry_price is not None
+    assert result.stop_loss is not None and result.stop_loss > result.entry_price
+    assert result.take_profit is not None and result.take_profit < result.entry_price
+
+
+@pytest.mark.asyncio
+async def test_min_signals_config_lowers_threshold():
+    """Lowering min_signals makes signals more likely; raising it to 6
+    restores the old all-or-nothing gate (no signal on choppy data)."""
+    assert TrendFollowingStrategy()._cfg("min_signals") == 4
+    choppy = _choppy_bars()
+    default = await TrendFollowingStrategy().analyze("XYZ", choppy)
+    strict = await TrendFollowingStrategy(config={"min_signals": 6}).analyze("XYZ", choppy)
+    assert default is not None
+    assert strict is None
 
 
 @pytest.mark.asyncio
@@ -156,7 +196,8 @@ async def test_signal_structure_when_fired():
         price = c
 
     result = await s.analyze("TEST", bars)
-    # The signal may or may not fire — the conditions are deliberately strict.
+    # The signal may or may not fire — the trend must still be strong enough
+    # to satisfy the min_signals threshold.
     if result is not None:
         assert result.symbol == "TEST"
         assert result.action in ("buy", "sell")

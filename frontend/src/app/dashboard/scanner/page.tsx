@@ -25,7 +25,7 @@ interface Strategy {
   enabled?: boolean;
 }
 
-const DEFAULT_SYMBOLS = "AAPL\nMSFT\nGOOGL\nAMZN\nTSLA";
+const DEFAULT_SYMBOLS = "AAPL\nMSFT\nGOOGL\nAMZN\nTSLA\nMETA\nNVDA\nNFLX\nDIS\nJPM\nBAC\nWMT\nJNJ\nPG\nV\nMA\nHD\nKO\nPEP\nBA\nGE\nF\nT\nXOM\nCVX";
 
 function strategyKey(strategy: Strategy) {
   return strategy.key || strategy.name || strategy.id || "";
@@ -160,7 +160,7 @@ export default function ScannerPage() {
 
       {!loading && signals && signals.length === 0 && (
         <div className="mt-6 rounded-xl border border-gray-800 bg-gray-900 p-10 text-center text-sm text-gray-400">
-          No signals found — the strategy requires all conditions to align
+          No signals found — the strategy requires at least 4 of 6 conditions to align
         </div>
       )}
 
