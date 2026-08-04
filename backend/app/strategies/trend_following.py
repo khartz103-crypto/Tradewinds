@@ -37,7 +37,7 @@ class TrendFollowingStrategy(BaseStrategy):
     # ── defaults ──────────────────────────────────────────────────────
 
     DEFAULTS: dict = {
-        "min_signals": 4,
+        "min_signals": 3,
         "short_window": 20,
         "long_window": 50,
         "adx_threshold": 25,

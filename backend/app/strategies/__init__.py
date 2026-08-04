@@ -75,3 +75,7 @@ def register_strategy(cls: type[BaseStrategy]) -> type[BaseStrategy]:
     """Decorator / explicit call: register a strategy class."""
     STRATEGY_REGISTRY[cls.name] = cls
     return cls
+
+# Import built-in strategies so their decorators populate the registry.
+from app.strategies import trend_following as _trend_following  # noqa: E402,F401
+from app.strategies import mean_reversion as _mean_reversion  # noqa: E402,F401

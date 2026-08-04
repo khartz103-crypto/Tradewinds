@@ -55,7 +55,7 @@ async def seed() -> None:
                     "crosses below. Uses ADX to filter for trending markets."
                 ),
                 config={
-                    "min_signals": 4,
+                    "min_signals": 3,
                     "short_window": 20,
                     "long_window": 50,
                     "adx_threshold": 25,
@@ -68,6 +68,23 @@ async def seed() -> None:
             print("[seed] Created trend_following strategy")
         else:
             print("[seed] trend_following strategy already exists")
+
+        # --- Mean-reversion strategy ---
+        result = await session.execute(select(Strategy).where(Strategy.name == "mean_reversion"))
+        existing_strategy = result.scalar_one_or_none()
+        if existing_strategy is None:
+            session.add(Strategy(
+                name="mean_reversion",
+                display_name="Mean Reversion",
+                description="A contrarian strategy that buys oversold conditions (RSI < 30, near lower Bollinger Band) and sells overbought conditions. Works best in range-bound markets.",
+                config={"rsi_period": 14, "rsi_oversold": 30, "rsi_overbought": 70,
+                        "bb_period": 20, "bb_std": 2.0, "min_signals": 2,
+                        "atr_period": 14, "atr_stop_mult": 2.0, "atr_target_mult": 3.0},
+            ))
+            await session.flush()
+            print("[seed] Created mean_reversion strategy")
+        else:
+            print("[seed] mean_reversion strategy already exists")
 
         # --- Default risk settings for admin ---
         result = await session.execute(

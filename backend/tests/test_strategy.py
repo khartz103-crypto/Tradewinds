@@ -151,7 +151,7 @@ async def test_threshold_fires_on_partial_conditions():
 async def test_min_signals_config_lowers_threshold():
     """Lowering min_signals makes signals more likely; raising it to 6
     restores the old all-or-nothing gate (no signal on choppy data)."""
-    assert TrendFollowingStrategy()._cfg("min_signals") == 4
+    assert TrendFollowingStrategy()._cfg("min_signals") == 3
     choppy = _choppy_bars()
     default = await TrendFollowingStrategy().analyze("XYZ", choppy)
     strict = await TrendFollowingStrategy(config={"min_signals": 6}).analyze("XYZ", choppy)
