@@ -9,27 +9,27 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models.market_data_cache import MarketDataCache
-from app.providers.alpaca import AlpacaProvider
+from app.providers.yahoo import YahooProvider
 from app.schemas.market_data import Bar, Quote, Snapshot
 
 logger = logging.getLogger(__name__)
 
 # ── singleton provider ───────────────────────────────────────────────
 
-_provider: AlpacaProvider | None = None
+_provider: YahooProvider | None = None
 
 
-def _get_provider() -> AlpacaProvider:
-    """Lazy-create the singleton Alpaca provider."""
+def _get_provider() -> YahooProvider:
+    """Lazy-create the singleton Yahoo Finance provider."""
     global _provider
     if _provider is None:
-        _provider = AlpacaProvider()
+        _provider = YahooProvider()
     return _provider
 
 
 # ── cache helpers ────────────────────────────────────────────────────
 
-_CACHE_PROVIDER = "alpaca"
+_CACHE_PROVIDER = "yahoo"
 _DATA_TYPE_BARS = "bars"
 _DATA_TYPE_QUOTE = "quote"
 _DATA_TYPE_SNAPSHOT = "snapshot"
@@ -108,7 +108,7 @@ async def get_daily_bars(
     """Fetch daily bars for *symbol* between *start_date* and *end_date*.
 
     Checks the ``MarketDataCache`` first; if no valid cached data is found
-    the Alpaca provider is called and the result is cached.
+    the Yahoo Finance provider is called and the result is cached.
     """
     cached = await _read_cache(session, symbol, _DATA_TYPE_BARS)
     if cached is not None:
