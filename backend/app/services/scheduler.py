@@ -69,7 +69,6 @@ async def set_enabled(enabled: bool) -> None:
 
     await get_redis().set(KEY_ENABLED, "1" if enabled else "0")
 
-
 async def get_status() -> dict:
     """Return scheduler status for the API / frontend."""
     from app.services.redis_client import get_redis
