@@ -240,6 +240,9 @@ async def scheduler_start(
 ) -> SchedulerStatusResponse:
     """Enable the scheduled auto-trading scanner (persisted in Redis)."""
     await scheduler_service.set_enabled(True)
+    # Restart the task so an API enable interrupts the current 15-minute sleep.
+    await scheduler_service.stop_loop()
+    scheduler_service.start_loop()
     return SchedulerStatusResponse(**await scheduler_service.get_status())
 
 
@@ -249,6 +252,7 @@ async def scheduler_stop(
 ) -> SchedulerStatusResponse:
     """Disable the scheduled auto-trading scanner (persisted in Redis)."""
     await scheduler_service.set_enabled(False)
+    await scheduler_service.stop_loop()
     return SchedulerStatusResponse(**await scheduler_service.get_status())
 
 
