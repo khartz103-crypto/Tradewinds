@@ -26,9 +26,7 @@ logger = logging.getLogger(__name__)
 
 #: Default watchlist scanned on every scheduled tick (same as the scanner UI).
 DEFAULT_SYMBOLS = [
-    "AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "META", "NVDA", "NFLX", "DIS",
-    "JPM", "BAC", "WMT", "JNJ", "PG", "V", "MA", "HD", "KO", "PEP", "BA",
-    "GE", "F", "T", "XOM", "CVX",
+    "AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "META", "NVDA", "NFLX", "JPM", "V",
 ]
 
 #: Strategy used by the scheduled scanner.
@@ -170,13 +168,20 @@ async def run_once() -> dict:
 
 async def _loop() -> None:
     """Background loop: run the scan while enabled, then sleep."""
+    first_tick = True
     while True:
         try:
+            if first_tick:
+                logger.info("Scheduler starting first cycle")
+                first_tick = False
             if await is_enabled():
+                # Record the start immediately so status reflects an in-flight cycle.
+                await _record_run({"scanned": False, "status": "running"})
                 summary = await run_once()
                 await _record_run(summary)
-        except Exception:
+        except Exception as exc:
             logger.exception("Scheduler tick failed")
+            await _record_run({"error": str(exc)[:200], "scanned": False})
         await asyncio.sleep(INTERVAL_SECONDS)
 
 
