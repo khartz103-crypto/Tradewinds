@@ -55,6 +55,7 @@ async def seed() -> None:
                     "crosses below. Uses ADX to filter for trending markets."
                 ),
                 config={
+                    "min_signals": 4,
                     "short_window": 20,
                     "long_window": 50,
                     "adx_threshold": 25,
