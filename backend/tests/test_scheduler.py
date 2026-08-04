@@ -71,6 +71,7 @@ async def test_run_once_opens_positions_for_admin(monkeypatch, fake_redis):
 
     class FakeStrategy:
         id = uuid4()
+        config = {}
 
     class FakeSession:
         """A bare session whose execute() returns scripted results."""
@@ -91,11 +92,17 @@ async def test_run_once_opens_positions_for_admin(monkeypatch, fake_redis):
         async def execute(self, *args, **kwargs):
             return self._script.pop(0)
 
+        async def flush(self):
+            pass
+
         async def commit(self):
             self.committed = True
 
     session = FakeSession()
     session.add_script(type("R", (), {"scalar_one_or_none": lambda self: FakeUser()})())
+    # Position query in manage_positions returns empty scalars
+    empty_result = type("R", (), {"scalars": lambda self: type("S", (), {"all": lambda self: []})()})()
+    session.add_script(empty_result)
     session.add_script(type("R", (), {"scalar_one_or_none": lambda self: FakeStrategy()})())
 
     async def fake_run_strategy(db, name, symbols):
@@ -121,6 +128,7 @@ async def test_run_once_opens_positions_for_admin(monkeypatch, fake_redis):
     summary = await scheduler.run_once()
     assert session.committed is True
     assert summary == {
+        "position_management": {"closed": [], "monitored": 0},
         "scanned_symbols": 25,
         "signals": 2,
         "opened": 1,
