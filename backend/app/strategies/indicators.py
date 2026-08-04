@@ -338,3 +338,17 @@ def volume_sma(volumes: list[int | float], period: int) -> list[float | None]:
     """Simple moving average of volume values."""
     values = [float(v) for v in volumes]
     return sma(values, period)
+
+# ── Bollinger Bands ──────────────────────────────────────────────────────
+def bbands(values: list[float], period: int = 20, stddev: float = 2.0) -> tuple[list[float | None], list[float | None], list[float | None]]:
+    """Return lower, middle (SMA), and upper Bollinger Bands."""
+    middle = sma(values, period)
+    lower: list[float | None] = [None] * len(values)
+    upper: list[float | None] = [None] * len(values)
+    for i, mean in enumerate(middle):
+        if mean is not None:
+            window = values[i - period + 1:i + 1]
+            deviation = (sum((value - mean) ** 2 for value in window) / period) ** 0.5
+            lower[i] = mean - stddev * deviation
+            upper[i] = mean + stddev * deviation
+    return lower, middle, upper

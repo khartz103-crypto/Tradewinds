@@ -247,7 +247,7 @@ export default function ScannerPage() {
                 disabled={strategyLoading}
                 className="mt-2 w-full rounded-lg border border-gray-600 bg-gray-900 px-3 py-2.5 text-sm capitalize text-gray-100 outline-none focus:border-blue-500"
               >
-                {strategies.length === 0 && <option value="trend_following">Trend Following</option>}
+                {strategies.length === 0 && <><option value="trend_following">Trend Following</option><option value="mean_reversion">Mean Reversion</option></>}
                 {strategies.map((item) => (
                   <option key={strategyKey(item)} value={strategyKey(item)}>
                     {item.display_name || item.name || strategyKey(item).replaceAll("_", " ")}
@@ -297,7 +297,7 @@ export default function ScannerPage() {
 
       {!loading && signals && signals.length === 0 && (
         <div className="mt-6 rounded-xl border border-gray-800 bg-gray-900 p-10 text-center text-sm text-gray-400">
-          No signals found — the strategy requires at least 4 of 6 conditions to align
+          No signals found — the strategy requires configured conditions to align
         </div>
       )}
 

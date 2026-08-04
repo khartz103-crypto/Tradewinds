@@ -139,26 +139,24 @@ async def run_once() -> dict:
         # Always enforce existing stops/targets before allocating new capital.
         management = await manage_positions(db, user_id=admin.id)
 
-        strategy_result = await db.execute(
-            select(Strategy).where(Strategy.name == DEFAULT_STRATEGY)
-        )
-        strategy = strategy_result.scalar_one_or_none()
-        strategy_id = strategy.id if strategy is not None else None
-
-        signals = await run_strategy(db, DEFAULT_STRATEGY, DEFAULT_SYMBOLS)
-        results = await auto_trade_signals(
-            db,
-            user_id=admin.id,
-            signals=signals,
-            strategy_id=strategy_id,
-            risk_per_trade=(strategy.config or {}).get("risk_per_trade", 0.02) if strategy else 0.02,
-            strategy_name=DEFAULT_STRATEGY,
-        )
+        signals = []
+        results = []
+        for strategy_name in ("trend_following", "mean_reversion"):
+            strategy_result = await db.execute(select(Strategy).where(Strategy.name == strategy_name))
+            strategy = strategy_result.scalar_one_or_none()
+            strategy_signals = await run_strategy(db, strategy_name, DEFAULT_SYMBOLS)
+            signals.extend(strategy_signals)
+            results.extend(await auto_trade_signals(
+                db, user_id=admin.id, signals=strategy_signals,
+                strategy_id=strategy.id if strategy else None,
+                risk_per_trade=(strategy.config or {}).get("risk_per_trade", 0.02) if strategy else 0.02,
+                strategy_name=strategy_name,
+            ))
         await db.commit()
 
         summary = {
             "position_management": management,
-            "scanned_symbols": len(DEFAULT_SYMBOLS),
+            "scanned_symbols": len(DEFAULT_SYMBOLS) * 2,
             "signals": len(signals),
             "opened": sum(1 for r in results if r.get("error") is None),
             "skipped": sum(1 for r in results if r.get("error") is not None),
