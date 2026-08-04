@@ -1,5 +1,7 @@
 """TradeWind AI — FastAPI backend."""
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -8,7 +10,28 @@ from app.auth import InvalidTokenError
 from app.config import settings
 from app.routers import auth, market_data, paper_trading, strategies
 
-app = FastAPI(title=settings.app_name)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Start the auto-trade scheduler loop on boot, stop it on shutdown.
+
+    The scheduler loop itself is always running in the background; whether it
+    actually scans depends on its enabled flag in Redis (so the on/off state
+    survives restarts).
+    """
+    from app.services.scheduler import start_loop, stop_loop
+
+    start_loop()
+    try:
+        yield
+    finally:
+        await stop_loop()
+        from app.services.redis_client import close_redis
+
+        await close_redis()
+
+
+app = FastAPI(title=settings.app_name, lifespan=lifespan)
 
 # CORS — allow the Next.js frontend
 app.add_middleware(

@@ -38,6 +38,23 @@ class OpenPositionRequest(BaseModel):
     take_profit: Decimal | None = Field(None, gt=0)
 
 
+class BatchOpenPositionsRequest(BaseModel):
+    """Request body for opening several paper positions at once."""
+
+    positions: list[OpenPositionRequest] = Field(..., min_length=1, max_length=50)
+
+
+class BatchPositionResult(BaseModel):
+    """Per-symbol outcome of a batch position open."""
+
+    symbol: str
+    side: str
+    quantity: Decimal | None = None
+    entry_price: Decimal | None = None
+    position_id: str | None = None
+    error: str | None = None
+
+
 def _position_to_response(p) -> PositionResponse:
     """Convert a Position ORM object to its Pydantic response schema."""
     return PositionResponse(
@@ -93,8 +110,8 @@ async def open_new_position(
             db=db,
             user_id=current_user.id,
             symbol=body.symbol,
-            side=body.side,
-            quantity=body.quantity,
+            qty=body.quantity,
+            action="buy" if body.side == "long" else "sell",
             stop_loss=body.stop_loss,
             take_profit=body.take_profit,
         )
@@ -109,6 +126,50 @@ async def open_new_position(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(exc),
         )
+
+
+@router.post("/positions/batch", response_model=list[BatchPositionResult])
+async def open_batch_positions(
+    body: BatchOpenPositionsRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[BatchPositionResult]:
+    """Open several paper positions in one request.
+
+    Each position is attempted independently — a failure for one symbol
+    (e.g. risk limit or missing quote) does not block the others. The
+    response carries per-symbol results with success or error details.
+    """
+    results: list[BatchPositionResult] = []
+    for req in body.positions:
+        try:
+            position = await open_position(
+                db=db,
+                user_id=current_user.id,
+                symbol=req.symbol,
+                qty=req.quantity,
+                action="buy" if req.side == "long" else "sell",
+                stop_loss=req.stop_loss,
+                take_profit=req.take_profit,
+            )
+            results.append(
+                BatchPositionResult(
+                    symbol=position.symbol,
+                    side=position.side.value if hasattr(position.side, "value") else position.side,
+                    quantity=position.quantity,
+                    entry_price=position.entry_price,
+                    position_id=str(position.id),
+                )
+            )
+        except (ValueError, RuntimeError) as exc:
+            results.append(
+                BatchPositionResult(
+                    symbol=req.symbol,
+                    side=req.side,
+                    error=str(exc),
+                )
+            )
+    return results
 
 
 @router.post("/positions/{position_id}/close", response_model=PositionResponse)
