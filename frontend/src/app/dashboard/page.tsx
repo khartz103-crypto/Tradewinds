@@ -17,6 +17,14 @@ interface PortfolioSummary {
   current_balance: number | string;
 }
 
+interface PerformanceSummary {
+  realized_pnl: number | string;
+  win_rate: number | string;
+  total_trades_closed: number;
+  open_positions: number;
+  current_equity: number | string;
+}
+
 interface EquityPoint {
   time: UTCTimestamp;
   value: number;
@@ -26,6 +34,7 @@ const REFRESH_MS = 30_000;
 
 export default function DashboardPage() {
   const [portfolio, setPortfolio] = useState<PortfolioSummary | null>(null);
+  const [performance, setPerformance] = useState<PerformanceSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [equityPoints, setEquityPoints] = useState<EquityPoint[]>([]);
@@ -42,8 +51,12 @@ export default function DashboardPage() {
 
   const fetchPortfolio = useCallback(async () => {
     try {
-      const data = await apiGet<PortfolioSummary>("/api/paper/portfolio");
+      const [data, metrics] = await Promise.all([
+        apiGet<PortfolioSummary>("/api/paper/portfolio"),
+        apiGet<PerformanceSummary>("/api/paper/performance"),
+      ]);
       setPortfolio(data);
+      setPerformance(metrics);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load portfolio");
@@ -184,6 +197,19 @@ export default function DashboardPage() {
         </div>
       ) : (
         <>
+          {/* Realized performance summary */}
+          <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+            <StatCard label="Realized P&L">
+              <PnlValue value={performance?.realized_pnl ?? 0} format={formatCurrency} />
+            </StatCard>
+            <StatCard label="Win Rate">
+              <span>{Number(performance?.win_rate ?? 0).toFixed(1)}%</span>
+            </StatCard>
+            <StatCard label="Open Positions">
+              <span>{performance?.open_positions ?? portfolio?.open_positions ?? 0}</span>
+            </StatCard>
+          </div>
+
           {/* Stats row */}
           <div className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
             <StatCard label="Account Value">

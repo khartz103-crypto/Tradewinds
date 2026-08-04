@@ -5,12 +5,16 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
 from app.database import get_db
+from app.models.paper_account import PaperAccount
+from app.models.position import Position, PositionStatus
 from app.models.user import User
 from app.schemas.paper_trading import (
+    PerformanceResponse,
     PortfolioSummaryResponse,
     PositionResponse,
     TradeResponse,
@@ -213,6 +217,38 @@ async def list_closed_positions(
     """Return closed paper positions, newest first."""
     positions = await get_closed_positions(db, user_id=current_user.id, limit=limit)
     return [_position_to_response(p) for p in positions]
+
+
+@router.get("/performance", response_model=PerformanceResponse)
+async def performance_summary(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> PerformanceResponse:
+    """Return realized P&L and win-rate metrics for paper trading."""
+    closed = await db.execute(select(Position).where(
+        Position.user_id == current_user.id,
+        Position.status == PositionStatus.CLOSED,
+    ))
+    positions = list(closed.scalars().all())
+    realized = sum((p.pnl or Decimal("0") for p in positions), Decimal("0"))
+    wins = sum(1 for p in positions if (p.pnl or Decimal("0")) > 0)
+    open_result = await db.execute(select(func.count()).select_from(Position).where(
+        Position.user_id == current_user.id, Position.status == PositionStatus.OPEN
+    ))
+    open_count = int(open_result.scalar_one())
+    account_result = await db.execute(select(PaperAccount).where(PaperAccount.user_id == current_user.id))
+    account = account_result.scalar_one_or_none()
+    open_positions = await db.execute(select(Position).where(
+        Position.user_id == current_user.id, Position.status == PositionStatus.OPEN
+    ))
+    current_equity = (account.current_balance if account else Decimal("0")) + sum(
+        (p.quantity * p.current_price for p in open_positions.scalars().all()), Decimal("0")
+    )
+    return PerformanceResponse(
+        realized_pnl=realized,
+        win_rate=(Decimal(wins * 100) / Decimal(len(positions)) if positions else Decimal("0")),
+        total_trades_closed=len(positions), open_positions=open_count, current_equity=current_equity,
+    )
 
 
 @router.get("/portfolio", response_model=PortfolioSummaryResponse)
