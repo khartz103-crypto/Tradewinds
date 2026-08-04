@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     alpaca_api_key_id: str = ""
     alpaca_api_secret_key: str = ""
     alpaca_base_url: str = "https://paper-api.alpaca.markets"
+    # Retained for backwards compatibility with the standalone AlpacaProvider.
     alpaca_data_url: str = "https://data.alpaca.markets"
 
     # Market data cache
