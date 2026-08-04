@@ -124,6 +124,7 @@ async def run_once() -> dict:
     """
     from app.database import async_session
     from app.services.auto_trade import auto_trade_signals
+    from app.services.position_manager import manage_positions
     from app.services.strategy_engine import run_strategy
 
     async with async_session() as db:
@@ -134,6 +135,9 @@ async def run_once() -> dict:
         if admin is None:
             logger.warning("Scheduler tick skipped — no admin user found")
             return {"scanned": False, "reason": "no admin user"}
+
+        # Always enforce existing stops/targets before allocating new capital.
+        management = await manage_positions(db, user_id=admin.id)
 
         strategy_result = await db.execute(
             select(Strategy).where(Strategy.name == DEFAULT_STRATEGY)
@@ -147,11 +151,13 @@ async def run_once() -> dict:
             user_id=admin.id,
             signals=signals,
             strategy_id=strategy_id,
+            risk_per_trade=(strategy.config or {}).get("risk_per_trade", 0.02) if strategy else 0.02,
             strategy_name=DEFAULT_STRATEGY,
         )
         await db.commit()
 
         summary = {
+            "position_management": management,
             "scanned_symbols": len(DEFAULT_SYMBOLS),
             "signals": len(signals),
             "opened": sum(1 for r in results if r.get("error") is None),

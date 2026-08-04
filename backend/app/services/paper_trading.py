@@ -221,6 +221,45 @@ async def open_position(
     return position
 
 
+async def close_position_at_market(
+    db: AsyncSession,
+    user_id: UUID,
+    position_id: UUID,
+    current_price: Decimal,
+) -> Position:
+    """Close a paper position at an already-fetched market price."""
+    result = await db.execute(select(Position).where(
+        Position.id == position_id, Position.user_id == user_id
+    ))
+    position = result.scalar_one_or_none()
+    if position is None:
+        raise ValueError(f"Position {position_id} not found")
+    if position.status == PositionStatus.CLOSED:
+        raise ValueError(f"Position {position_id} is already closed")
+    if current_price <= 0:
+        raise ValueError("Exit price must be positive")
+    pnl = (_pnl_long(position.entry_price, current_price, position.quantity)
+           if position.side == PositionSide.LONG
+           else _pnl_short(position.entry_price, current_price, position.quantity))
+    now = datetime.now(timezone.utc)
+    position.status = PositionStatus.CLOSED
+    position.exit_price = current_price
+    position.exit_date = now
+    position.current_price = current_price
+    position.pnl = pnl
+    db.add(Trade(
+        user_id=user_id, position_id=position.id, symbol=position.symbol,
+        side="sell" if position.side == PositionSide.LONG else "buy",
+        quantity=position.quantity, price=current_price, order_type=OrderType.MARKET,
+        status=TradeStatus.FILLED, filled_at=now, strategy_id=position.strategy_id,
+        is_paper=True,
+    ))
+    account = await _get_paper_account(db, user_id)
+    account.current_balance += pnl
+    await db.flush()
+    return position
+
+
 async def close_position(
     db: AsyncSession,
     position_id: UUID,

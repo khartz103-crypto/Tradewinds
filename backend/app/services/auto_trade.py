@@ -7,8 +7,7 @@ auto-execution pipeline:
 * Only trades signals with no error and an action of ``"buy"`` or ``"sell"``.
 * Never opens a second position on a symbol that already has one open
   (no doubling up).
-* Default position size is 10% of the paper account cash balance unless an
-  explicit ``position_size`` (in dollars) is provided.
+* Default position size risks 2% of account equity based on the stop distance.
 * Every open goes through :func:`app.services.paper_trading.open_position`,
   which enforces risk limits (max open positions, portfolio exposure,
   buying power).
@@ -29,11 +28,11 @@ from app.services.paper_trading import open_position
 
 logger = logging.getLogger(__name__)
 
-#: Fraction of the paper account cash balance used per trade by default.
-DEFAULT_POSITION_PCT = Decimal("0.10")
+#: Fraction of account equity risked between entry and stop by default.
+DEFAULT_RISK_PER_TRADE = Decimal("0.02")
 
-#: Round fractional quantities to 4 decimals (Numeric(18,8) in the DB).
-QTY_PRECISION = Decimal("0.0001")
+#: Whole-share sizing is required to preserve capital.
+QTY_PRECISION = Decimal("1")
 
 TRADEABLE_ACTIONS = ("buy", "sell")
 
@@ -66,22 +65,28 @@ async def get_cash_balance(db: AsyncSession, user_id: UUID) -> Decimal:
 
 
 def _compute_quantity(
-    entry_price: Decimal, balance: Decimal, position_size: float | Decimal | None
+    entry_price: Decimal,
+    balance: Decimal,
+    position_size: float | Decimal | None,
+    action: str = "buy",
+    stop_loss: Decimal | None = None,
+    risk_per_trade: float | Decimal = DEFAULT_RISK_PER_TRADE,
 ) -> Decimal:
-    """Compute the number of shares for a trade.
-
-    Uses ``position_size`` (in dollars) when provided, otherwise the default
-    percentage of the cash balance. Never exceeds available cash.
-    """
+    """Compute whole-share quantity from risk dollars and stop distance."""
+    # Explicit dollar sizing remains supported for manual/API callers.
     if position_size is not None:
-        dollars = Decimal(str(position_size))
-    else:
-        dollars = (balance * DEFAULT_POSITION_PCT).quantize(QTY_PRECISION)
-
-    dollars = min(dollars, max(balance, Decimal("0")))
-
-    qty = (dollars / entry_price).quantize(QTY_PRECISION)
-    return qty
+        dollars = min(Decimal(str(position_size)), max(balance, Decimal("0")))
+        return (dollars / entry_price).to_integral_value(rounding="ROUND_FLOOR")
+    if stop_loss is None:
+        return Decimal("0")
+    distance = entry_price - stop_loss if action == "buy" else stop_loss - entry_price
+    if distance <= 0:
+        return Decimal("0")
+    risk_dollars = max(balance, Decimal("0")) * Decimal(str(risk_per_trade))
+    qty = (risk_dollars / distance).to_integral_value(rounding="ROUND_FLOOR")
+    # Buying power cap; the minimum-share rule is applied only when affordable.
+    qty = min(qty, (max(balance, Decimal("0")) / entry_price).to_integral_value(rounding="ROUND_FLOOR"))
+    return max(qty, Decimal("1")) if qty == 0 and balance >= entry_price else qty
 
 
 async def auto_trade_signals(
@@ -91,6 +96,7 @@ async def auto_trade_signals(
     *,
     strategy_id: UUID | None = None,
     position_size: float | None = None,
+    risk_per_trade: float | Decimal = DEFAULT_RISK_PER_TRADE,
     strategy_name: str = "strategy",
 ) -> list[dict]:
     """Open paper positions for tradeable signals.
@@ -146,7 +152,9 @@ async def auto_trade_signals(
             continue
 
         entry_price = Decimal(str(signal.entry_price))
-        qty = _compute_quantity(entry_price, balance, position_size)
+        stop_loss = Decimal(str(signal.stop_loss)) if signal.stop_loss is not None else None
+        take_profit = Decimal(str(signal.take_profit)) if signal.take_profit is not None else None
+        qty = _compute_quantity(entry_price, balance, position_size, signal.action, stop_loss, risk_per_trade)
         if qty <= 0:
             results.append(
                 {
@@ -165,12 +173,8 @@ async def auto_trade_signals(
                 qty=qty,
                 action=signal.action,
                 entry_price=entry_price,
-                stop_loss=(
-                    Decimal(str(signal.stop_loss)) if signal.stop_loss is not None else None
-                ),
-                take_profit=(
-                    Decimal(str(signal.take_profit)) if signal.take_profit is not None else None
-                ),
+                stop_loss=stop_loss,
+                take_profit=take_profit,
                 strategy_id=strategy_id,
                 notes=f"Auto-trade from {strategy_name} scan",
             )

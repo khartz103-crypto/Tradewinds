@@ -48,6 +48,14 @@ class PortfolioSummaryResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class PerformanceResponse(BaseModel):
+    realized_pnl: Decimal
+    win_rate: Decimal
+    total_trades_closed: int
+    open_positions: int
+    current_equity: Decimal
+
+
 class TradeResponse(BaseModel):
     """All trade fields for API output."""
 
