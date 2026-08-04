@@ -51,7 +51,7 @@ async def test_scheduler_status_shape(fake_redis):
     assert status["running"] is False
     assert status["interval_seconds"] == 15 * 60
     assert status["default_symbols"] == scheduler.DEFAULT_SYMBOLS
-    assert len(status["default_symbols"]) == 25
+    assert len(status["default_symbols"]) == 10
     assert status["last_run"] is None
     assert status["last_summary"] is None
 
@@ -104,13 +104,17 @@ async def test_run_once_opens_positions_for_admin(monkeypatch, fake_redis):
     empty_result = type("R", (), {"scalars": lambda self: type("S", (), {"all": lambda self: []})()})()
     session.add_script(empty_result)
     session.add_script(type("R", (), {"scalar_one_or_none": lambda self: FakeStrategy()})())
+    # Mean-reversion strategy lookup follows trend-following.
+    session.add_script(type("R", (), {"scalar_one_or_none": lambda self: FakeStrategy()})())
 
     async def fake_run_strategy(db, name, symbols):
-        assert name == "trend_following"
+        assert name in ("trend_following", "mean_reversion")
         assert symbols == scheduler.DEFAULT_SYMBOLS
-        return [_signal("AAPL"), _signal("MSFT")]
+        return [_signal("AAPL"), _signal("MSFT")] if name == "trend_following" else []
 
     async def fake_auto_trade(db, user_id, signals, **kwargs):
+        if not signals:
+            return []
         return [
             {"symbol": "AAPL", "side": "long", "error": None},
             {"symbol": "MSFT", "side": "long", "error": "Already has an open position"},
@@ -129,7 +133,7 @@ async def test_run_once_opens_positions_for_admin(monkeypatch, fake_redis):
     assert session.committed is True
     assert summary == {
         "position_management": {"closed": [], "monitored": 0},
-        "scanned_symbols": 25,
+        "scanned_symbols": 20,
         "signals": 2,
         "opened": 1,
         "skipped": 1,
