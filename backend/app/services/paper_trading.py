@@ -78,12 +78,13 @@ async def open_position(
     db: AsyncSession,
     user_id: UUID,
     symbol: str,
-    side: str,
-    quantity: Decimal,
-    strategy_id: UUID | None = None,
-    notes: str | None = None,
+    qty: Decimal,
+    action: str = "buy",
+    entry_price: Decimal | None = None,
     stop_loss: Decimal | None = None,
     take_profit: Decimal | None = None,
+    strategy_id: UUID | None = None,
+    notes: str | None = None,
 ) -> Position:
     """Open a new paper-trading position with risk checks.
 
@@ -91,35 +92,46 @@ async def open_position(
         db: Active DB session.
         user_id: The user opening the position.
         symbol: Ticker symbol, e.g. ``"AAPL"``.
-        side: ``"long"`` or ``"short"``.
-        quantity: Number of shares/contracts.
-        strategy_id: Optional strategy that generated this trade.
-        notes: Free-text notes.
+        qty: Number of shares/contracts.
+        action: ``"buy"``/``"long"`` opens a long; ``"sell"``/``"short"`` opens a short.
+        entry_price: Execution price. If ``None``, the latest market quote is fetched.
         stop_loss: Price at which to auto-close for a loss.
         take_profit: Price at which to auto-close for a gain.
+        strategy_id: Optional strategy that generated this trade.
+        notes: Free-text notes.
 
     Returns:
         The newly created ``Position`` (already flushed to the DB).
 
     Raises:
-        ValueError: If a risk limit would be violated.
+        ValueError: If a risk limit would be violated or the quantity is not positive.
         RuntimeError: If the quote fetch fails.
     """
-    # 1. Fetch latest quote
-    try:
-        quote = await get_latest_quote(db, symbol)
-    except Exception as exc:
-        raise RuntimeError(
-            f"Failed to fetch quote for {symbol}: {exc}"
-        ) from exc
+    if qty <= 0:
+        raise ValueError("Quantity must be positive")
 
-    price = _mid_price(quote)
-    if price is None:
-        raise RuntimeError(f"No usable price for {symbol} — quote is empty")
+    # 1. Determine execution price — caller-provided entry price wins; otherwise
+    #    fall back to the latest market quote.
+    if entry_price is None:
+        try:
+            quote = await get_latest_quote(db, symbol)
+        except Exception as exc:
+            raise RuntimeError(
+                f"Failed to fetch quote for {symbol}: {exc}"
+            ) from exc
 
-    entry_price = price
+        price = _mid_price(quote)
+        if price is None:
+            raise RuntimeError(f"No usable price for {symbol} — quote is empty")
+        entry_price = price
 
-    # 2. Load risk settings
+    if entry_price <= 0:
+        raise ValueError("Entry price must be positive")
+
+    # 2. Map action → position side ("buy"/"long" → long, "sell"/"short" → short)
+    side_str = "long" if action.lower() in ("buy", "long") else "short"
+
+    # 3. Load risk settings
     risk = await _get_risk_settings(db, user_id)
 
     # 3. Count current open positions
@@ -137,7 +149,7 @@ async def open_position(
         )
 
     # 4. Calculate position value and total exposure
-    position_value = quantity * entry_price
+    position_value = qty * entry_price
 
     open_positions_result = await db.execute(
         select(Position).where(
@@ -164,12 +176,12 @@ async def open_position(
             )
 
     # 5. Create Position record
-    position_side = PositionSide.LONG if side.lower() == "long" else PositionSide.SHORT
+    position_side = PositionSide.LONG if side_str == "long" else PositionSide.SHORT
     position = Position(
         user_id=user_id,
         symbol=symbol.upper(),
         side=position_side,
-        quantity=quantity,
+        quantity=qty,
         entry_price=entry_price,
         current_price=entry_price,
         status=PositionStatus.OPEN,
@@ -186,8 +198,8 @@ async def open_position(
         user_id=user_id,
         position_id=position.id,
         symbol=symbol.upper(),
-        side=side.lower(),
-        quantity=quantity,
+        side=side_str,
+        quantity=qty,
         price=entry_price,
         order_type=OrderType.MARKET,
         status=TradeStatus.FILLED,
@@ -200,10 +212,10 @@ async def open_position(
 
     logger.info(
         "Opened %s %s @ %s qty=%s (position=%s)",
-        side.upper(),
+        side_str.upper(),
         symbol,
         entry_price,
-        quantity,
+        qty,
         position.id,
     )
     return position
