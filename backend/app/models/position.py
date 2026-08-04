@@ -30,12 +30,27 @@ class Position(Base):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     symbol: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
-    side: Mapped[PositionSide] = mapped_column(Enum(PositionSide), nullable=False)
+    side: Mapped[PositionSide] = mapped_column(
+        Enum(
+            PositionSide,
+            name="positionside",
+            create_type=False,
+            values_callable=lambda enum_class: [member.value for member in enum_class],
+        ),
+        nullable=False,
+    )
     quantity: Mapped[Decimal] = mapped_column(Numeric(18, 8), nullable=False)
     entry_price: Mapped[Decimal] = mapped_column(Numeric(18, 8), nullable=False)
     current_price: Mapped[Decimal] = mapped_column(Numeric(18, 8), nullable=False)
     status: Mapped[PositionStatus] = mapped_column(
-        Enum(PositionStatus), default=PositionStatus.OPEN, nullable=False
+        Enum(
+            PositionStatus,
+            name="positionstatus",
+            create_type=False,
+            values_callable=lambda enum_class: [member.value for member in enum_class],
+        ),
+        default=PositionStatus.OPEN,
+        nullable=False
     )
     strategy_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("strategies.id", ondelete="SET NULL"), nullable=True
