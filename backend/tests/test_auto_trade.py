@@ -100,12 +100,12 @@ async def test_skips_error_and_hold_signals(fake_db):
 
 
 async def test_default_position_size_is_risk_based(fake_db):
-    """With no position_size, each trade sizes risk at 2% of the cash balance."""
+    """With no position_size, each trade sizes risk at 0.5% of the cash balance."""
     signals = [_signal("MSFT", entry_price=100.0)]
     results = await auto_trade.auto_trade_signals(fake_db, uuid4(), signals)
     assert results[0]["error"] is None
-    # 2% of 100,000 = 2,000 risk dollars / $5 stop distance = 400 shares
-    assert results[0]["quantity"] == Decimal("400.0000")
+    # 0.5% of 100,000 = 500 risk dollars / $5 stop distance = 100 shares
+    assert results[0]["quantity"] == Decimal("100.0000")
     assert results[0]["side"] == "long"
 
 

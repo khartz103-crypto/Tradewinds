@@ -148,6 +148,10 @@ async def run_once() -> dict:
                 "signals": len(signals),
                 "opened": sum(1 for r in results if r.get("error") is None),
                 "skipped": sum(1 for r in results if r.get("error") is not None),
+                "errors": {
+                    error: sum(1 for r in results if r.get("error") == error)
+                    for error in {r.get("error") for r in results if r.get("error") is not None}
+                },
             }
             logger.info("Scheduled scan complete: %s", summary)
             return summary
