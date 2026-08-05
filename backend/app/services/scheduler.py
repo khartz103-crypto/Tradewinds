@@ -152,6 +152,7 @@ async def run_once() -> dict:
             logger.info("Scheduled scan complete: %s", summary)
             return summary
         except Exception:
+            logger.exception("Scheduler cycle failed — DB error details:")
             try:
                 await db.rollback()
             except Exception:
@@ -176,7 +177,7 @@ async def _loop() -> None:
                 await _record_run(summary)
         except Exception as exc:
             logger.exception("Scheduler tick failed")
-            await _record_run({"error": str(exc)[:200], "scanned": False})
+            await _record_run({"error": str(exc)[:1000], "scanned": False})
         await asyncio.sleep(INTERVAL_SECONDS)
 
 
