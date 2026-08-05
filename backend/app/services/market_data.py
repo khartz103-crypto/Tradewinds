@@ -2,7 +2,7 @@
 
 import json
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +13,17 @@ from app.providers.yahoo import YahooProvider
 from app.schemas.market_data import Bar, Quote, Snapshot
 
 logger = logging.getLogger(__name__)
+
+
+def _json_safe(obj):
+    """Recursively convert datetime/date objects to ISO strings for JSON storage."""
+    if isinstance(obj, (datetime, date)):
+        return obj.isoformat()
+    if isinstance(obj, dict):
+        return {k: _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_json_safe(v) for v in obj]
+    return obj
 
 # ── singleton provider ───────────────────────────────────────────────
 
@@ -87,7 +98,7 @@ async def _write_cache(
         symbol=symbol.upper(),
         provider=_CACHE_PROVIDER,
         data_type=data_type,
-        data=data if isinstance(data, dict) else {"items": data},
+        data=_json_safe(data if isinstance(data, dict) else {"items": data}),
         fetched_at=now,
         expires_at=now + timedelta(minutes=ttl_minutes),
     )
