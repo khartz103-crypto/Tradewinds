@@ -86,7 +86,7 @@ export default function ScannerPage() {
   const [strategy, setStrategy] = useState("trend_following");
   const [signals, setSignals] = useState<Signal[] | null>(null);
   const [positionsOpened, setPositionsOpened] = useState<PositionOpened[]>([]);
-  const [autoTrade, setAutoTrade] = useState(false);
+  const [autoTrade, setAutoTrade] = useState(() => typeof window !== "undefined" && localStorage.getItem("autoTrade") === "true");
   const [loading, setLoading] = useState(false);
   const [strategyLoading, setStrategyLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -263,7 +263,7 @@ export default function ScannerPage() {
                 type="button"
                 role="switch"
                 aria-checked={autoTrade}
-                onClick={() => setAutoTrade((current) => !current)}
+                onClick={() => setAutoTrade((current) => { const next = !current; localStorage.setItem("autoTrade", String(next)); return next; })}
                 className={`relative h-6 w-11 rounded-full transition ${autoTrade ? "bg-emerald-600" : "bg-gray-600"}`}
               >
                 <span
