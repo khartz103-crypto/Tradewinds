@@ -272,7 +272,7 @@ export default function ScannerPage() {
               </button>
             </label>
             <p className="mt-1.5 text-xs text-gray-500">
-              When ON, buy/sell signals are executed as paper positions automatically (10% of balance each, no doubling up).
+              When ON, buy/sell signals are executed as paper positions automatically (risk-based sizing: 0.5% of account risked per trade, no doubling up).
             </p>
 
             <button

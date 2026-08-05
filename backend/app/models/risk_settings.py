@@ -21,7 +21,7 @@ class RiskSettings(Base):
     max_risk_per_trade_pct: Mapped[Decimal] = mapped_column(
         Numeric(5, 2), default=Decimal("1.00"), nullable=False
     )
-    max_open_positions: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    max_open_positions: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     max_daily_loss_pct: Mapped[Decimal] = mapped_column(
         Numeric(5, 2), default=Decimal("3.00"), nullable=False
     )

@@ -7,7 +7,7 @@ auto-execution pipeline:
 * Only trades signals with no error and an action of ``"buy"`` or ``"sell"``.
 * Never opens a second position on a symbol that already has one open
   (no doubling up).
-* Default position size risks 2% of account equity based on the stop distance.
+* Default position size risks 0.5% of account equity based on the stop distance.
 * Every open goes through :func:`app.services.paper_trading.open_position`,
   which enforces risk limits (max open positions, portfolio exposure,
   buying power).
@@ -29,7 +29,7 @@ from app.services.paper_trading import open_position
 logger = logging.getLogger(__name__)
 
 #: Fraction of account equity risked between entry and stop by default.
-DEFAULT_RISK_PER_TRADE = Decimal("0.02")
+DEFAULT_RISK_PER_TRADE = Decimal("0.005")
 
 #: Whole-share sizing is required to preserve capital.
 QTY_PRECISION = Decimal("1")

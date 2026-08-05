@@ -137,6 +137,7 @@ async def test_run_once_opens_positions_for_admin(monkeypatch, fake_redis):
         "signals": 2,
         "opened": 1,
         "skipped": 1,
+        "errors": {"Already has an open position": 1},
     }
 
     # Run details are persisted to Redis for the status endpoint.
