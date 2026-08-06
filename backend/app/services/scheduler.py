@@ -138,7 +138,7 @@ async def run_once() -> dict:
                 results.extend(await auto_trade_signals(
                     db, user_id=admin.id, signals=strategy_signals,
                     strategy_id=strategy.id if strategy else None,
-                    risk_per_trade=(strategy.config or {}).get("risk_per_trade", 0.02) if strategy else 0.02,
+                    risk_per_trade=(strategy.config or {}).get("risk_per_trade", 0.005) if strategy else 0.005,
                     strategy_name=strategy_name,
                 ))
             await db.commit()
