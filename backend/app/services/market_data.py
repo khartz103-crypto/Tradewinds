@@ -118,22 +118,26 @@ async def get_daily_bars(
 ) -> list[Bar]:
     """Fetch daily bars for *symbol* between *start_date* and *end_date*.
 
-    Checks the ``MarketDataCache`` first; if no valid cached data is found
-    the Yahoo Finance provider is called and the result is cached.
+    Checks the ``MarketDataCache`` first. Cached bars are served only when
+    they cover the requested range (within a tolerance for the most recent
+    bar, which is often not printed yet); otherwise the Yahoo Finance provider
+    is called again and the cache entry is overwritten. The returned list is
+    always filtered to ``[start_date, end_date]``.
     """
     cached = await _read_cache(session, symbol, _DATA_TYPE_BARS)
     if cached is not None:
         items: list = cached.data.get("items", cached.data) if isinstance(cached.data, dict) else cached.data
-        # Only serve cache if the date range is covered (heuristic: at least
-        # one bar in range).
-        return [_bar_from_dict(b) for b in items]
+        bars = sorted((_bar_from_dict(b) for b in items), key=lambda b: b.timestamp)
+        if _covers_range(bars, start_date, end_date):
+            return _filter_bars(bars, start_date, end_date)
 
     provider = _get_provider()
     raw = await provider.get_bars(symbol, start_date, end_date)
 
     ttl = settings.market_data_cache_ttl_minutes
     await _write_cache(session, symbol, _DATA_TYPE_BARS, raw, ttl)
-    return [_bar_from_dict(b) for b in raw]
+    bars = [_bar_from_dict(b) for b in raw]
+    return _filter_bars(bars, start_date, end_date)
 
 
 async def get_latest_quote(
@@ -183,6 +187,35 @@ async def get_snapshots(
 # ── internal helpers ─────────────────────────────────────────────────
 
 
+def _filter_bars(bars: list[Bar], start_date, end_date) -> list[Bar]:
+    """Return only bars whose timestamps fall within ``[start_date, end_date]``."""
+    start = _ensure_dt(start_date)
+    end = _ensure_dt(end_date)
+    return [b for b in bars if start <= _ensure_dt(b.timestamp) <= end]
+
+
+def _covers_range(bars: list[Bar], start_date, end_date, tolerance_days: int = 3) -> bool:
+    """Heuristic coverage check: can cached *bars* (ascending) serve the request?
+
+    Returns ``True`` when the cached series starts at or before *start_date*
+    and ends at or after *end_date* minus a small tolerance. The tolerance
+    exists because the most recent daily bar is often not printed yet (weekend,
+    pre-market, or today's session still in progress); without it the scanner
+    would refetch and overwrite the cache on every cycle.
+    """
+    if not bars:
+        return False
+    start = _ensure_dt(start_date)
+    end = _ensure_dt(end_date)
+    first = _ensure_dt(bars[0].timestamp)
+    last = _ensure_dt(bars[-1].timestamp)
+    if first > start:
+        return False
+    if last < end - timedelta(days=tolerance_days):
+        return False
+    return True
+
+
 def _bar_from_dict(d: dict) -> Bar:
     """Convert a raw bar dict to a ``Bar`` Pydantic model."""
     return Bar(
@@ -201,6 +234,8 @@ def _ensure_dt(val) -> datetime:
         if val.tzinfo is None:
             return val.replace(tzinfo=timezone.utc)
         return val
+    if isinstance(val, date):
+        return datetime(val.year, val.month, val.day, tzinfo=timezone.utc)
     if isinstance(val, str):
         return datetime.fromisoformat(val.replace("Z", "+00:00"))
     return datetime.now(timezone.utc)
