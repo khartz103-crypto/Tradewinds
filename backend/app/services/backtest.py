@@ -41,6 +41,9 @@ logger = logging.getLogger(__name__)
 #: Bars skipped at the start of each symbol's series (indicator warmup).
 #: Strategies return ``None`` while indicators are warming up anyway; this
 #: simply avoids calling ``analyze()`` before there is enough data.
+#: Strategies expose their own ``min_bars`` (e.g. 400 for the 200-day SMA of
+#: ``momentum_pullback``) which takes precedence — this constant is only the
+#: fallback for strategies/instances that do not declare one.
 WARMUP_BARS = 60
 
 EXIT_STOP_LOSS = "stop_loss"
@@ -252,6 +255,10 @@ async def run_backtest(
     """
     strategy = await _load_strategy(db, strategy_name, config_overrides)
     initial = Decimal(str(initial_balance))
+    # Strategy-aware warmup: honor the strategy's own minimum history
+    # requirement (e.g. ``momentum_pullback.min_bars == 400``) so signals are
+    # only evaluated once all indicators are computable.
+    warmup_bars = getattr(strategy, "min_bars", WARMUP_BARS)
 
     # ── 1. Fetch and index daily bars per symbol ─────────────────────
     bar_map: dict[str, list[Bar]] = {}
@@ -403,7 +410,7 @@ async def run_backtest(
                 if symbol in positions:
                     continue
                 idx = sym_index[symbol].get(day)
-                if idx is None or idx < WARMUP_BARS:
+                if idx is None or idx < warmup_bars:
                     continue
                 if day not in sym_next[symbol]:
                     continue  # no next trading day → cannot fill without lookahead

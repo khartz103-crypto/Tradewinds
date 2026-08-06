@@ -41,6 +41,12 @@ class BaseStrategy(ABC):
     name: str
     display_name: str
 
+    #: Minimum number of bars required before ``analyze`` can produce a
+    #: signal. Strategies that need long indicator windows (e.g. a 200-day
+    #: SMA) override this; the scanner lookback and the backtest warmup both
+    #: honor it.
+    min_bars: int = 120
+
     def __init__(self, config: dict | None = None) -> None:
         self.config = config or {}
 
@@ -79,3 +85,4 @@ def register_strategy(cls: type[BaseStrategy]) -> type[BaseStrategy]:
 # Import built-in strategies so their decorators populate the registry.
 from app.strategies import trend_following as _trend_following  # noqa: E402,F401
 from app.strategies import mean_reversion as _mean_reversion  # noqa: E402,F401
+from app.strategies import momentum_pullback as _momentum_pullback  # noqa: E402,F401

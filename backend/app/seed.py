@@ -86,6 +86,40 @@ async def seed() -> None:
         else:
             print("[seed] mean_reversion strategy already exists")
 
+        # --- Momentum pullback strategy ---
+        result = await session.execute(
+            select(Strategy).where(Strategy.name == "momentum_pullback")
+        )
+        existing_strategy = result.scalar_one_or_none()
+        if existing_strategy is None:
+            session.add(Strategy(
+                name="momentum_pullback",
+                display_name="Momentum Pullback",
+                description=(
+                    "Enters long positions on pullbacks within a confirmed uptrend "
+                    "(50-day SMA above 200-day SMA): waits for price to pull back "
+                    "3-10% from a recent high, touch the 20-day SMA or lower "
+                    "Bollinger Band, and begin to stabilize. Uses a 2xATR stop and "
+                    "4xATR target (1:2 risk/reward). Mirrors for shorts in downtrends."
+                ),
+                config={
+                    "trend_fast_period": 50,
+                    "trend_slow_period": 200,
+                    "recent_high_period": 60,
+                    "pullback_min_pct": 0.03,
+                    "pullback_max_pct": 0.10,
+                    "bollinger_period": 20,
+                    "bollinger_std": 2.0,
+                    "atr_period": 14,
+                    "atr_stop_mult": 2.0,
+                    "atr_target_mult": 4.0,
+                },
+            ))
+            await session.flush()
+            print("[seed] Created momentum_pullback strategy")
+        else:
+            print("[seed] momentum_pullback strategy already exists")
+
         # --- Default risk settings for admin ---
         result = await session.execute(
             select(RiskSettings).where(RiskSettings.user_id == admin_id)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
@@ -13,6 +14,16 @@ from app.services.market_data import get_daily_bars
 from app.strategies import BaseStrategy, StrategySignal, get_strategy
 
 logger = logging.getLogger(__name__)
+
+
+def _min_bars_to_lookback_days(min_bars: int) -> int:
+    """Convert a required number of daily bars into calendar days.
+
+    ~252 trading days fall in ~365 calendar days; a 10% safety buffer
+    guarantees the fetched window contains at least *min_bars* daily bars
+    even across holidays and partial weeks.
+    """
+    return int(math.ceil(min_bars * (365.0 / 252.0) * 1.10))
 
 
 async def run_strategy(
@@ -58,8 +69,12 @@ async def run_strategy(
         )
         return []
 
-    # 3. Date range
+    # 3. Date range — a strategy with a long indicator window (e.g. the
+    # 200-day SMA of ``momentum_pullback``) needs more history than the
+    # default lookback. Always honor at least the strategy's ``min_bars``.
     end_date = datetime.now(timezone.utc)
+    required_lookback = _min_bars_to_lookback_days(strategy.min_bars)
+    lookback_days = max(lookback_days, required_lookback)
     start_date = end_date - timedelta(days=lookback_days)
 
     # 4. Analyze each symbol
