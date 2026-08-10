@@ -120,6 +120,32 @@ async def seed() -> None:
         else:
             print("[seed] momentum_pullback strategy already exists")
 
+        # --- Trend breakout strategy ---
+        result = await session.execute(select(Strategy).where(Strategy.name == "breakout"))
+        existing_strategy = result.scalar_one_or_none()
+        if existing_strategy is None:
+            session.add(Strategy(
+                name="breakout",
+                display_name="Trend Breakout",
+                description=(
+                    "A simple momentum strategy that buys a new 20-day high when price is "
+                    "above the 200-day SMA, or shorts a new 20-day low below it. Uses a "
+                    "2xATR stop and 4xATR target (1:2 risk/reward)."
+                ),
+                config={
+                    "trend_period": 200,
+                    "breakout_period": 20,
+                    "atr_period": 14,
+                    "atr_stop_mult": 2.0,
+                    "atr_target_mult": 4.0,
+                    "min_bars": 300,
+                },
+            ))
+            await session.flush()
+            print("[seed] Created breakout strategy")
+        else:
+            print("[seed] breakout strategy already exists")
+
         # --- Default risk settings for admin ---
         result = await session.execute(
             select(RiskSettings).where(RiskSettings.user_id == admin_id)
