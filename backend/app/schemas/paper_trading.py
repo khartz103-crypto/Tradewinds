@@ -54,6 +54,44 @@ class PerformanceResponse(BaseModel):
     total_trades_closed: int
     open_positions: int
     current_equity: Decimal
+class EquityCurvePointResponse(BaseModel):
+    """One equity-curve point (date + account value)."""
+    date: datetime
+    equity: float
+class PerSymbolPerformanceResponse(BaseModel):
+    """Per-symbol P&L breakdown for the profit dashboard."""
+    symbol: str
+    trade_count: int
+    total_pnl: float
+    win_rate_pct: float
+    avg_r_multiple: float
+class RecentTradeResponse(BaseModel):
+    """One closed position row for the position-history table."""
+    symbol: str
+    side: str
+    quantity: float
+    entry_price: float
+    exit_price: float | None = None
+    entry_date: datetime
+    exit_date: datetime
+    pnl: float
+    holding_days: float
+class DashboardPerformanceResponse(BaseModel):
+    """Live performance metrics for ``GET /api/dashboard/performance``."""
+    current_equity: float
+    starting_balance: float
+    total_return_pct: float
+    total_pnl: float
+    open_positions: int
+    total_trades_closed: int
+    win_rate_pct: float
+    profit_factor: float | None = None
+    sharpe_ratio: float
+    max_drawdown_pct: float
+    avg_holding_days: float
+    per_symbol: list[PerSymbolPerformanceResponse] = []
+    equity_curve: list[EquityCurvePointResponse] = []
+    recent_trades: list[RecentTradeResponse] = []
 
 
 class TradeResponse(BaseModel):

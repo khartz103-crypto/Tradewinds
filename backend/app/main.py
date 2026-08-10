@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 
 from app.auth import InvalidTokenError
 from app.config import settings
-from app.routers import auth, backtest, market_data, paper_trading, strategies
+from app.routers import auth, backtest, dashboard, market_data, paper_trading, strategies
 
 
 @asynccontextmanager
@@ -76,3 +76,4 @@ app.include_router(market_data.router)
 app.include_router(strategies.router)
 app.include_router(paper_trading.router)
 app.include_router(backtest.router)
+app.include_router(dashboard.router)
