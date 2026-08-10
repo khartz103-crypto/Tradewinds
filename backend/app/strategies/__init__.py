@@ -84,6 +84,5 @@ def register_strategy(cls: type[BaseStrategy]) -> type[BaseStrategy]:
 
 # Import built-in strategies so their decorators populate the registry.
 from app.strategies import trend_following as _trend_following  # noqa: E402,F401
-from app.strategies import mean_reversion as _mean_reversion  # noqa: E402,F401
 from app.strategies import momentum_pullback as _momentum_pullback  # noqa: E402,F401
 from app.strategies import breakout as _breakout  # noqa: E402,F401

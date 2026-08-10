@@ -69,22 +69,16 @@ async def seed() -> None:
         else:
             print("[seed] trend_following strategy already exists")
 
-        # --- Mean-reversion strategy ---
+        # --- Retired strategies (cleanup) ---
+        # Mean Reversion was retired after the 2026-08-10 real-data backtest sweep:
+        # 4yr return −27.19%, PF 0.77, Sharpe −0.69, 36.9% max drawdown — a confirmed
+        # loser. Remove any stale DB row from previous deploys so it stops appearing
+        # in the scanner UI / scheduler. See /home/team/shared/backtest_summary.md.
         result = await session.execute(select(Strategy).where(Strategy.name == "mean_reversion"))
-        existing_strategy = result.scalar_one_or_none()
-        if existing_strategy is None:
-            session.add(Strategy(
-                name="mean_reversion",
-                display_name="Mean Reversion",
-                description="A contrarian strategy that buys oversold conditions (RSI < 30, near lower Bollinger Band) and sells overbought conditions. Works best in range-bound markets.",
-                config={"rsi_period": 14, "rsi_oversold": 30, "rsi_overbought": 70,
-                        "bb_period": 20, "bb_std": 2.0, "min_signals": 2,
-                        "atr_period": 14, "atr_stop_mult": 2.0, "atr_target_mult": 3.0},
-            ))
-            await session.flush()
-            print("[seed] Created mean_reversion strategy")
-        else:
-            print("[seed] mean_reversion strategy already exists")
+        retired_strategy = result.scalar_one_or_none()
+        if retired_strategy is not None:
+            await session.delete(retired_strategy)
+            print("[seed] Removed retired mean_reversion strategy")
 
         # --- Momentum pullback strategy ---
         result = await session.execute(

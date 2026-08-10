@@ -31,6 +31,9 @@ DEFAULT_SYMBOLS = [
 
 #: Strategy used by the scheduled scanner.
 DEFAULT_STRATEGY = "trend_following"
+#: Strategies the scheduled scanner runs each tick. Mean Reversion was retired
+#: after the 2026-08-10 backtest sweep (4yr −27.19%, PF 0.77, Sharpe −0.69).
+ACTIVE_STRATEGIES = (DEFAULT_STRATEGY,)
 
 #: How often the scheduled scanner runs.
 INTERVAL_SECONDS = 15 * 60
@@ -130,7 +133,7 @@ async def run_once() -> dict:
                 return {"scanned": False, "reason": "no admin user"}
             management = await manage_positions(db, user_id=admin.id)
             signals, results = [], []
-            for strategy_name in ("trend_following", "mean_reversion"):
+            for strategy_name in ACTIVE_STRATEGIES:
                 strategy_result = await db.execute(select(Strategy).where(Strategy.name == strategy_name))
                 strategy = strategy_result.scalar_one_or_none()
                 strategy_signals = await run_strategy(db, strategy_name, DEFAULT_SYMBOLS)
@@ -144,7 +147,7 @@ async def run_once() -> dict:
             await db.commit()
             summary = {
                 "position_management": management,
-                "scanned_symbols": len(DEFAULT_SYMBOLS) * 2,
+                "scanned_symbols": len(DEFAULT_SYMBOLS) * len(ACTIVE_STRATEGIES),
                 "signals": len(signals),
                 "opened": sum(1 for r in results if r.get("error") is None),
                 "skipped": sum(1 for r in results if r.get("error") is not None),
