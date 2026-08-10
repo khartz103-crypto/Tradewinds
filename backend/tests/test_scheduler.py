@@ -104,13 +104,11 @@ async def test_run_once_opens_positions_for_admin(monkeypatch, fake_redis):
     empty_result = type("R", (), {"scalars": lambda self: type("S", (), {"all": lambda self: []})()})()
     session.add_script(empty_result)
     session.add_script(type("R", (), {"scalar_one_or_none": lambda self: FakeStrategy()})())
-    # Mean-reversion strategy lookup follows trend-following.
-    session.add_script(type("R", (), {"scalar_one_or_none": lambda self: FakeStrategy()})())
 
     async def fake_run_strategy(db, name, symbols):
-        assert name in ("trend_following", "mean_reversion")
+        assert name == "trend_following"
         assert symbols == scheduler.DEFAULT_SYMBOLS
-        return [_signal("AAPL"), _signal("MSFT")] if name == "trend_following" else []
+        return [_signal("AAPL"), _signal("MSFT")]
 
     async def fake_auto_trade(db, user_id, signals, **kwargs):
         if not signals:
@@ -133,7 +131,7 @@ async def test_run_once_opens_positions_for_admin(monkeypatch, fake_redis):
     assert session.committed is True
     assert summary == {
         "position_management": {"closed": [], "monitored": 0},
-        "scanned_symbols": 20,
+        "scanned_symbols": 10,
         "signals": 2,
         "opened": 1,
         "skipped": 1,

@@ -247,7 +247,7 @@ export default function ScannerPage() {
                 disabled={strategyLoading}
                 className="mt-2 w-full rounded-lg border border-gray-600 bg-gray-900 px-3 py-2.5 text-sm capitalize text-gray-100 outline-none focus:border-blue-500"
               >
-                {strategies.length === 0 && <><option value="trend_following">Trend Following</option><option value="mean_reversion">Mean Reversion</option></>}
+                {strategies.length === 0 && <option value="trend_following">Trend Following</option>}
                 {strategies.map((item) => (
                   <option key={strategyKey(item)} value={strategyKey(item)}>
                     {item.display_name || item.name || strategyKey(item).replaceAll("_", " ")}
