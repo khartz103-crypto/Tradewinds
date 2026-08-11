@@ -68,6 +68,64 @@ class TrendFollowingStrategy(BaseStrategy):
                 return v
         return None
 
+    @staticmethod
+    def _join_phrases(phrases: list[str]) -> str:
+        """Join short phrases with commas plus a final 'and'."""
+        if len(phrases) <= 1:
+            return phrases[0]
+        return ", ".join(phrases[:-1]) + ", and " + phrases[-1]
+
+    def _build_summary(
+        self, symbol: str, action: str, conditions: dict[str, bool]
+    ) -> str:
+        """Return 1–2 short plain-English sentences explaining a signal.
+
+        Only conditions that passed *in the signal's direction* are
+        described — for a SELL, a condition "passes" when its raw check
+        evaluated False. Conditions that failed are never mentioned, so the
+        summary is always truthful to the underlying checks. No indicator
+        names (EMA/SMA/ADX/MACD/RSI), no PASS/FAIL tokens, no counts.
+        """
+        if action not in ("buy", "sell"):
+            return ""
+        passed = {
+            name: (result if action == "buy" else not result)
+            for name, result in conditions.items()
+        }
+
+        if action == "buy":
+            detail = []
+            if passed.get("ema_alignment") or passed.get("sma_alignment"):
+                detail.append("it's trading above its key moving averages")
+            if passed.get("adx_trending"):
+                detail.append("the uptrend looks strong and well established")
+            if passed.get("macd_momentum"):
+                detail.append("momentum is pushing prices in the same direction")
+            if passed.get("volume_confirmation"):
+                detail.append("trading volume is picking up, confirming broad interest")
+            if passed.get("rsi_zone"):
+                detail.append("it still has room to run and is not overheated")
+            core = f"{symbol} is in a clear uptrend"
+            recommendation = "The strategy expects the rise to continue and recommends buying."
+        else:
+            detail = []
+            if passed.get("ema_alignment") or passed.get("sma_alignment"):
+                detail.append("it's trading below its key moving averages")
+            if passed.get("adx_trending"):
+                detail.append("the market isn't showing enough strength to reverse course")
+            if passed.get("macd_momentum"):
+                detail.append("momentum is fading and pushing prices lower")
+            if passed.get("volume_confirmation"):
+                detail.append("buyers are not stepping in with conviction")
+            core = f"{symbol} is trending down"
+            recommendation = "The strategy expects further weakness and recommends selling."
+
+        if detail:
+            core = f"{core} — {self._join_phrases(detail)}."
+        else:
+            core = f"{core}."
+        return f"{core} {recommendation}"
+
     # ── analyze ───────────────────────────────────────────────────────
 
     async def analyze(
@@ -239,6 +297,7 @@ class TrendFollowingStrategy(BaseStrategy):
             f"Entry: {entry_price:.2f}, SL: {stop_loss:.2f}, TP: {take_profit:.2f}. "
             f"Confidence: {confidence:.1f}%"
         )
+        summary = self._build_summary(symbol, action, conditions)
 
         return StrategySignal(
             symbol=symbol,
@@ -248,5 +307,6 @@ class TrendFollowingStrategy(BaseStrategy):
             stop_loss=round(stop_loss, 2) if stop_loss is not None else None,
             take_profit=round(take_profit, 2) if take_profit is not None else None,
             reasoning=reasoning,
+            summary=summary,
             indicators=indicators,
         )
