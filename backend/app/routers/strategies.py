@@ -55,6 +55,7 @@ class StrategySignalResponse(BaseModel):
     stop_loss: float | None = None
     take_profit: float | None = None
     reasoning: str = ""
+    summary: str = ""
     indicators: dict = {}
     error: str | None = None
 
@@ -104,6 +105,7 @@ def _signal_dc_to_response(signal: StrategySignalDC) -> StrategySignalResponse:
         stop_loss=signal.stop_loss,
         take_profit=signal.take_profit,
         reasoning=signal.reasoning,
+        summary=signal.summary,
         indicators=signal.indicators,
         error=signal.error,
     )

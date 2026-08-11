@@ -12,6 +12,10 @@ interface Signal {
   stop_loss: number | string;
   take_profit: number | string;
   reasoning: string;
+  /** Plain-English explanation of why the signal fired (optional — the
+   *  backend fills this for the trend-following strategy; when absent the
+   *  card falls back to showing `reasoning`). */
+  summary?: string;
   indicators: Record<string, number | string | null>;
   timestamp?: string;
   error?: string;
@@ -360,9 +364,23 @@ export default function ScannerPage() {
                     <Price label="Take Profit" value={signal.take_profit} />
                     <div><p className="text-xs text-gray-500">Risk / Reward</p><p className="mt-1 text-lg font-semibold text-gray-100">{ratio(signal)}</p></div>
                   </div>
-                  <blockquote className="mt-5 border-l-2 border-blue-500 bg-gray-900/60 px-4 py-3 text-sm leading-6 text-gray-300">{signal.reasoning || "No reasoning provided."}</blockquote>
+                  {signal.summary?.trim() ? (
+                    <p className="mt-5 rounded-lg border border-blue-900/60 bg-blue-950/40 px-4 py-3 text-sm leading-6 text-blue-100">{signal.summary}</p>
+                  ) : (
+                    <blockquote className="mt-5 border-l-2 border-blue-500 bg-gray-900/60 px-4 py-3 text-sm leading-6 text-gray-300">{signal.reasoning || "No reasoning provided."}</blockquote>
+                  )}
                   <button type="button" onClick={() => setExpanded((previous) => ({ ...previous, [key]: !previous[key] }))} className="mt-4 text-sm font-medium text-blue-400 hover:text-blue-300">{expanded[key] ? "▾ Hide indicators" : "▸ Show indicators"}</button>
-                  {expanded[key] && <div className="mt-3 grid grid-cols-2 gap-2 rounded-lg bg-gray-900 p-4 sm:grid-cols-3 md:grid-cols-4">{Object.entries(signal.indicators || {}).map(([name, value]) => <div key={name}><p className="text-xs uppercase tracking-wide text-gray-500">{name.replaceAll("_", " ")}</p><p className="mt-1 text-sm font-medium text-gray-200">{value == null ? "—" : typeof value === "number" ? value.toFixed(2) : value}</p></div>)}</div>}
+                  {expanded[key] && (
+                    <div className="mt-3 rounded-lg bg-gray-900 p-4">
+                      {signal.summary?.trim() && (
+                        <div className="mb-4">
+                          <p className="text-xs uppercase tracking-wide text-gray-500">Technical details</p>
+                          <blockquote className="mt-1 border-l-2 border-blue-500 bg-gray-950/60 px-4 py-3 text-sm leading-6 text-gray-400">{signal.reasoning || "No reasoning provided."}</blockquote>
+                        </div>
+                      )}
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">{Object.entries(signal.indicators || {}).map(([name, value]) => <div key={name}><p className="text-xs uppercase tracking-wide text-gray-500">{name.replaceAll("_", " ")}</p><p className="mt-1 text-sm font-medium text-gray-200">{value == null ? "—" : typeof value === "number" ? value.toFixed(2) : value}</p></div>)}</div>
+                    </div>
+                  )}
                 </div>
               </article>
             );

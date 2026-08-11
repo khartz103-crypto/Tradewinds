@@ -229,3 +229,91 @@ async def test_custom_config():
     result = await s.analyze("CUSTOM", bars)
     # Not asserting signal — just that it doesn't crash and uses config
     assert result is None or result.symbol == "CUSTOM"
+
+
+# ── plain-English summary tests ───────────────────────────────────────
+
+TECHNICAL_TOKENS = (
+    "ema_alignment", "sma_alignment", "adx_trending", "macd_momentum",
+    "rsi_zone", "volume_confirmation", "PASS", "FAIL", "EMA", "SMA",
+    "ADX", "MACD", "RSI", "/6", "conditions met",
+)
+
+
+@pytest.mark.asyncio
+async def test_signal_summary_populated_plain_english():
+    """A generated signal carries a non-empty plain-English summary.
+
+    The choppy fixture deterministically fires a SELL (see
+    test_threshold_fires_on_partial_conditions), so this exercises the
+    summary built for a real signal, not just the helper.
+    """
+    s = TrendFollowingStrategy()
+    result = await s.analyze("XYZ", _choppy_bars())
+    assert result is not None
+    assert result.summary, "summary must be populated on a generated signal"
+    assert "XYZ" in result.summary
+    # Plain-English phrasing, not a rehash of the reasoning string.
+    assert "trend" in result.summary.lower() or "momentum" in result.summary.lower()
+    assert "recommends selling" in result.summary
+    for token in TECHNICAL_TOKENS:
+        assert token not in result.summary, f"summary contains technical token: {token}"
+
+
+def test_build_summary_buy_describes_only_passing_conditions():
+    """BUY summary mentions passing conditions, never failed ones."""
+    s = TrendFollowingStrategy()
+    conditions = {
+        "ema_alignment": True,
+        "sma_alignment": True,
+        "adx_trending": False,   # fails -> must not appear
+        "macd_momentum": True,
+        "rsi_zone": False,       # fails -> must not appear
+        "volume_confirmation": False,  # fails -> must not appear
+    }
+    summary = s._build_summary("AAPL", "buy", conditions)
+    assert "AAPL" in summary
+    assert "clear uptrend" in summary
+    assert "above its key moving averages" in summary
+    assert "momentum is pushing prices in the same direction" in summary
+    assert "recommends buying" in summary
+    assert "strong" not in summary          # adx failed
+    assert "volume" not in summary          # volume failed
+    assert "room to run" not in summary     # rsi failed
+
+
+def test_build_summary_sell_describes_only_passing_conditions():
+    """SELL summary flips the pass direction: failed raw checks are the
+    bearish ones, and failed-for-sell conditions are never mentioned.
+    Phrasing stays truthful to what the raw check actually means (e.g.
+    ADX below threshold -> no strength to reverse; volume not elevated ->
+    buyers not stepping in)."""
+    s = TrendFollowingStrategy()
+    conditions = {
+        "ema_alignment": False,        # below MAs -> passes for sell
+        "sma_alignment": False,        # below MAs -> passes for sell
+        "adx_trending": False,         # no trend strength -> passes for sell
+        "macd_momentum": False,        # fading -> passes for sell
+        "rsi_zone": True,              # raw True -> fails for sell, unmentioned
+        "volume_confirmation": False,  # volume NOT elevated -> passes for sell
+    }
+    summary = s._build_summary("MSFT", "sell", conditions)
+    assert "MSFT" in summary
+    assert "trending down" in summary
+    assert "below its key moving averages" in summary
+    assert "momentum is fading" in summary
+    assert "reverse course" in summary
+    assert "buyers are not stepping in" in summary
+    assert "recommends selling" in summary
+    # Conditions that failed for sell are never described
+    assert "room to run" not in summary   # rsi_zone failed for sell
+    assert "overheated" not in summary
+    assert "strong" not in summary        # no overclaiming from a weak ADX
+    assert "volume is picking up" not in summary  # raw volume was NOT elevated
+
+
+def test_build_summary_hold_returns_empty():
+    """Non-trade actions produce no summary (defensive)."""
+    s = TrendFollowingStrategy()
+    conditions = {name: True for name in TECHNICAL_TOKENS[:6]}
+    assert s._build_summary("AAPL", "hold", conditions) == ""

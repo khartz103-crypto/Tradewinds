@@ -21,6 +21,10 @@ class StrategySignal:
     stop_loss: float | None = None
     take_profit: float | None = None
     reasoning: str = ""
+    #: Short plain-English explanation of why the signal fired, for
+    #: non-technical users. Strategies may leave it empty; the frontend
+    #: falls back to ``reasoning`` in that case.
+    summary: str = ""
     indicators: dict = field(default_factory=dict)
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     error: str | None = None
