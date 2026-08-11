@@ -31,6 +31,7 @@ class StrategyInfoResponse(BaseModel):
     display_name: str
     description: str
     is_enabled: bool
+    regime_filter: str | None = None
     config: dict
 
     model_config = {"from_attributes": True}
@@ -154,6 +155,7 @@ async def list_strategies(
             display_name=s.display_name,
             description=s.description,
             is_enabled=s.is_enabled,
+            regime_filter=s.regime_filter,
             config=s.config or {},
         )
         for s in strategies
@@ -182,6 +184,7 @@ async def get_strategy_details(
         display_name=strategy.display_name,
         description=strategy.description,
         is_enabled=strategy.is_enabled,
+        regime_filter=strategy.regime_filter,
         config=strategy.config or {},
     )
 
