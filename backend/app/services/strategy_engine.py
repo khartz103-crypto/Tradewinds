@@ -12,8 +12,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.strategy import Strategy
 from app.services.market_data import get_daily_bars
 from app.strategies import BaseStrategy, StrategySignal, get_strategy
+from app.strategies.indicators import sma
 
 logger = logging.getLogger(__name__)
+
+#: Market index symbol used by the "spy200sma" regime filter.
+REGIME_SYMBOL = "SPY"
+#: SMA period for the "spy200sma" regime filter.
+REGIME_SMA_PERIOD = 200
 
 
 def _min_bars_to_lookback_days(min_bars: int) -> int:
@@ -58,6 +64,7 @@ async def run_strategy(
         return []
 
     config = db_strategy.config or {}
+    regime_filter = getattr(db_strategy, "regime_filter", None) or None
 
     # 2. Instantiate the strategy class via registry
     try:
@@ -77,8 +84,46 @@ async def run_strategy(
     lookback_days = max(lookback_days, required_lookback)
     start_date = end_date - timedelta(days=lookback_days)
 
-    # 4. Analyze each symbol
+    # 4. Regime filter — when enabled, fetch the index's bars once so the
+    # gate can be evaluated for every symbol in this scan. SPY needs at
+    # least REGIME_SMA_PERIOD daily bars for a defined SMA, so extend the
+    # lookback for this fetch beyond the strategy's own requirement
+    # (mirrors production, where the indicator always has full history).
+    spy_close: float | None = None
+    spy_sma200: float | None = None
+    if regime_filter == "spy200sma":
+        spy_lookback = max(lookback_days, _min_bars_to_lookback_days(REGIME_SMA_PERIOD))
+        spy_start = end_date - timedelta(days=spy_lookback)
+        try:
+            spy_bars = await get_daily_bars(db, REGIME_SYMBOL, spy_start, end_date)
+        except Exception as exc:
+            logger.exception("Failed to fetch %s bars for regime filter.", REGIME_SYMBOL)
+            spy_bars = []
+        if len(spy_bars) >= REGIME_SMA_PERIOD:
+            closes = [float(b.close) for b in spy_bars]
+            sma_line = sma(closes, REGIME_SMA_PERIOD)
+            last_sma = sma_line[-1]
+            if last_sma is not None:
+                spy_close = closes[-1]
+                spy_sma200 = float(last_sma)
+                logger.info(
+                    "Regime filter 'spy200sma': %s close %.2f vs SMA%d %.2f",
+                    REGIME_SYMBOL, spy_close, REGIME_SMA_PERIOD, spy_sma200,
+                )
+            else:
+                logger.warning(
+                    "Regime filter 'spy200sma': %s SMA%d undefined on latest bar — signals will be skipped.",
+                    REGIME_SYMBOL, REGIME_SMA_PERIOD,
+                )
+        else:
+            logger.warning(
+                "Regime filter 'spy200sma': only %d %s bars available (< %d) — signals will be skipped.",
+                len(spy_bars), REGIME_SYMBOL, REGIME_SMA_PERIOD,
+            )
+
+    # 5. Analyze each symbol
     signals: list[StrategySignal] = []
+    filtered = 0
     for symbol in symbols:
         try:
             bars = await get_daily_bars(db, symbol, start_date, end_date)
@@ -87,6 +132,24 @@ async def run_strategy(
                 continue
 
             signal = await strategy.analyze(symbol, bars)
+            if signal is not None and regime_filter == "spy200sma":
+                # Skip the signal when SPY is at or below its 200-day SMA:
+                # the validated regime filter only trades above it.
+                if spy_close is None or spy_sma200 is None:
+                    logger.warning(
+                        "Regime filter 'spy200sma' unavailable — skipping %s signal for %s.",
+                        signal.action.upper(), signal.symbol,
+                    )
+                    filtered += 1
+                    continue
+                if spy_close <= spy_sma200:
+                    logger.info(
+                        "Regime filter 'spy200sma': %s %.2f <= SMA%d %.2f — %s signal for %s filtered.",
+                        REGIME_SYMBOL, spy_close, REGIME_SMA_PERIOD, spy_sma200,
+                        signal.action.upper(), signal.symbol,
+                    )
+                    filtered += 1
+                    continue
             if signal is not None:
                 signals.append(signal)
                 logger.info(
@@ -106,5 +169,8 @@ async def run_strategy(
                     error=str(exc),
                 )
             )
+
+    if filtered:
+        logger.info("Strategy '%s': %d signal(s) filtered by regime filter '%s'.", strategy_name, filtered, regime_filter)
 
     return signals
