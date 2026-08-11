@@ -62,12 +62,23 @@ async def seed() -> None:
                     "adx_period": 14,
                     "volume_factor": 1.5,
                 },
+                # Skip signals while SPY sits at or below its 200-day SMA.
+                # Validated 2026-08-11: OOS Sharpe 0.247 → 1.138, return 5.5×,
+                # only ~17% of trades filtered. See /home/team/shared/regime_filter_spy200.md.
+                regime_filter="spy200sma",
             )
             session.add(strategy)
             await session.flush()
             print("[seed] Created trend_following strategy")
         else:
-            print("[seed] trend_following strategy already exists")
+            # Existing deployments: backfill the regime filter so the live
+            # scheduler picks it up without manual SQL.
+            if not existing_strategy.regime_filter:
+                existing_strategy.regime_filter = "spy200sma"
+                session.add(existing_strategy)
+                print("[seed] Enabled SPY>200SMA regime filter on existing trend_following strategy")
+            else:
+                print("[seed] trend_following strategy already exists")
 
         # --- Retired strategies (cleanup) ---
         # Mean Reversion was retired after the 2026-08-10 real-data backtest sweep:
